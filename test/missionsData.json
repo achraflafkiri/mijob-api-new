@@ -1,0 +1,171 @@
+{
+  "examples": [
+    {
+      "name": "Basic Mission - Serveur/Serveuse",
+      "data": {
+        "title": "Serveur pour événement d'entreprise",
+        "city": "Casablanca",
+        "serviceType": "Serveur / Serveuse",
+        "description": "Nous recherchons un serveur expérimenté pour un événement d'entreprise. Vous serez en charge du service à table, de l'accueil des invités et de l'assistance générale. Une tenue professionnelle est requise. Expérience dans l'événementiel souhaitée. Dynamisme et sourire sont essentiels pour cette mission.",
+        "startDate": "2025-11-15",
+        "endDate": "2025-11-15",
+        "startTime": "18:00",
+        "endTime": "23:00",
+        "paymentType": "hourly",
+        "paymentAmount": 50,
+        "workType": "onsite",
+        "addressInputType": "manual",
+        "address": "Hôtel Hyatt Regency, Place des Nations Unies, Casablanca",
+        "featuredListing": false,
+        "language": "fr"
+      }
+    },
+    {
+      "name": "Featured Mission - Baby-sitting",
+      "data": {
+        "title": "Baby-sitting pour 2 enfants",
+        "city": "Rabat",
+        "serviceType": "Garde d'enfants & Baby-sitting",
+        "description": "Recherche baby-sitter expérimentée pour garder 2 enfants (3 ans et 6 ans) pendant la soirée. Les enfants devront être couchés à 21h. Personne patiente, douce et avec références obligatoires. Connaissance des premiers secours serait un plus. Une collation sera fournie.",
+        "startDate": "2025-11-20",
+        "endDate": "2025-11-20",
+        "startTime": "19:00",
+        "endTime": "00:00",
+        "paymentType": "fixed",
+        "paymentAmount": 200,
+        "workType": "onsite",
+        "addressInputType": "map",
+        "latitude": 34.0209,
+        "longitude": -6.8416,
+        "featuredListing": true,
+        "language": "fr"
+      }
+    },
+    {
+      "name": "Remote Mission - Community Management",
+      "data": {
+        "title": "Community Manager - Gestion réseaux sociaux",
+        "city": "Marrakech",
+        "serviceType": "Community management & marketing digital",
+        "description": "Nous cherchons un community manager pour gérer nos réseaux sociaux (Facebook, Instagram, LinkedIn) pendant 1 mois. Missions : création de contenu (3 posts/semaine), réponses aux messages, engagement avec la communauté, reporting hebdomadaire. Maîtrise de Canva et bonnes capacités rédactionnelles en français et anglais requises.",
+        "startDate": "2025-12-01",
+        "endDate": "2025-12-31",
+        "startTime": "09:00",
+        "endTime": "18:00",
+        "paymentType": "daily",
+        "paymentAmount": 150,
+        "workType": "remote",
+        "featuredListing": false,
+        "language": "fr"
+      }
+    },
+    {
+      "name": "Daily Mission - Aide à domicile",
+      "data": {
+        "title": "Aide à domicile pour personne âgée",
+        "city": "Fès",
+        "serviceType": "Aide aux personnes âgées ou dépendantes",
+        "description": "Recherche aide à domicile bienveillante pour accompagner une personne âgée au quotidien. Missions : aide aux repas, accompagnement pour les courses, discussions et compagnie. Contrat de 3 mois renouvelable. Personne douce, patiente et à l'écoute. Expérience dans l'aide à la personne fortement appréciée.",
+        "startDate": "2025-11-25",
+        "endDate": "2026-02-25",
+        "startTime": "10:00",
+        "endTime": "16:00",
+        "paymentType": "daily",
+        "paymentAmount": 250,
+        "workType": "onsite",
+        "addressInputType": "manual",
+        "address": "Quartier Atlas, Fès",
+        "featuredListing": false,
+        "language": "fr"
+      }
+    },
+    {
+      "name": "Event Mission - Hôte/Hôtesse d'accueil",
+      "data": {
+        "title": "Hôtesse d'accueil pour salon professionnel",
+        "city": "Tanger",
+        "serviceType": "Hôte / Hôtesse d'accueil et de promotion",
+        "description": "Recherche hôtesse d'accueil souriante et professionnelle pour un salon B2B. Missions : accueil des visiteurs, distribution de badges, orientation, renseignements généraux. Tenue élégante exigée (fournie). Excellente présentation, maîtrise du français et de l'anglais. Expérience en événementiel appréciée.",
+        "startDate": "2025-11-28",
+        "endDate": "2025-11-30",
+        "startTime": "08:00",
+        "endTime": "18:00",
+        "paymentType": "daily",
+        "paymentAmount": 300,
+        "workType": "onsite",
+        "addressInputType": "manual",
+        "address": "Centre de Congrès Ibn Batouta, Route de Rabat, Tanger",
+        "featuredListing": true,
+        "language": "fr"
+      }
+    },
+    {
+      "name": "Short Mission - Livraison",
+      "data": {
+        "title": "Livreur à moto - Service express",
+        "city": "Agadir",
+        "serviceType": "Livraison et transport (livreur à vélo, scooter, voiture)",
+        "description": "Recherche livreur avec moto pour service de livraison express pendant le weekend. 20 à 30 livraisons par jour estimées. Connaissance parfaite de la ville d'Agadir obligatoire. Permis moto et assurance à jour requis. Ponctualité et professionnalisme essentiels. Smartphone nécessaire pour l'application.",
+        "startDate": "2025-11-16",
+        "endDate": "2025-11-17",
+        "startTime": "12:00",
+        "endTime": "22:00",
+        "paymentType": "daily",
+        "paymentAmount": 400,
+        "workType": "onsite",
+        "addressInputType": "manual",
+        "address": "Restaurant FastFood Central, Avenue Hassan II, Agadir",
+        "featuredListing": false,
+        "language": "fr"
+      }
+    },
+    {
+      "name": "Teaching Mission - Soutien scolaire",
+      "data": {
+        "title": "Professeur de mathématiques - Niveau lycée",
+        "city": "Oujda",
+        "serviceType": "Soutien scolaire & aide aux devoirs",
+        "description": "Recherche professeur de mathématiques pour cours particuliers niveau lycée (1ère et Terminale). 3 sessions par semaine de 2h. Préparation au baccalauréat. Pédagogue, patient et avec de bonnes références. Diplôme universitaire en mathématiques ou formation équivalente souhaité. Possibilité de prolongation selon résultats.",
+        "startDate": "2025-12-02",
+        "endDate": "2026-06-15",
+        "startTime": "17:00",
+        "endTime": "19:00",
+        "paymentType": "hourly",
+        "paymentAmount": 100,
+        "workType": "onsite",
+        "addressInputType": "manual",
+        "address": "Quartier Hay Qods, Oujda",
+        "featuredListing": false,
+        "language": "fr"
+      }
+    },
+    {
+      "name": "Administrative Mission - Soutien administratif",
+      "data": {
+        "title": "Assistant administratif temporaire",
+        "city": "Casablanca",
+        "serviceType": "Soutien administratif",
+        "description": "Recherche assistant administratif pour renfort temporaire (1 mois). Missions : classement de documents, saisie de données, gestion du courrier, prise de rendez-vous, accueil téléphonique. Maîtrise du Pack Office indispensable. Personne organisée, rigoureuse et autonome. Expérience en secrétariat appréciée.",
+        "startDate": "2025-11-18",
+        "endDate": "2025-12-18",
+        "startTime": "09:00",
+        "endTime": "17:00",
+        "paymentType": "daily",
+        "paymentAmount": 200,
+        "workType": "onsite",
+        "addressInputType": "manual",
+        "address": "Twin Center, Boulevard Zerktouni, Casablanca",
+        "featuredListing": false,
+        "language": "fr"
+      }
+    }
+  ],
+  "postman_config": {
+    "method": "POST",
+    "url": "http://localhost:5000/api/v1/missions",
+    "headers": {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer YOUR_JWT_TOKEN_HERE"
+    }
+  }
+}
