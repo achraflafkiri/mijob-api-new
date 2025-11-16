@@ -108,9 +108,9 @@ const userSchema = new mongoose.Schema({
   lastName: {
     type: String,
     trim: true,
-    required: function () {
-      return this.userType === 'partimer';
-    }
+    // required: function () {
+    //   return this.userType === 'partimer';
+    // }
   },
 
   dateOfBirth: {
@@ -713,7 +713,7 @@ const userSchema = new mongoose.Schema({
     available: {
       type: Number,
       default: function () {
-        return this.userType !== 'partimer' ? 5 : 0;
+        return this.userType !== 'partimer' ? 10 : 0;
       }
     },
     used: {

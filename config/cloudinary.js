@@ -98,6 +98,63 @@ const missionImageStorage = new CloudinaryStorage({
 });
 
 // ============================================
+// MIXED STORAGE (For Registration - No Auth Required)
+// ============================================
+
+// This storage handles both profile photos and documents for registration
+const registrationStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    const timestamp = Date.now();
+    const fieldName = file.fieldname;
+    const randomString = Math.random().toString(36).substring(7);
+
+    // Determine folder and transformations based on field name
+    if (fieldName === 'photoProfil') {
+      return {
+        folder: 'mijob/profiles',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+        transformation: [
+          { width: 500, height: 500, crop: 'fill', gravity: 'face' },
+          { quality: 'auto' },
+          { fetch_format: 'auto' }
+        ],
+        public_id: `partimer-temp-${timestamp}-${randomString}`,
+      };
+    } else {
+      // For documents (cinFile, permisFile, autreDoc)
+      return {
+        folder: 'mijob/documents',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+        resource_type: 'auto',
+        public_id: `${fieldName}-temp-${timestamp}-${randomString}`,
+      };
+    }
+  },
+});
+
+// ============================================
+// MESSAGE ATTACHMENTS STORAGE
+// ============================================
+
+// Storage for message attachments (images, PDFs, documents)
+const messageAttachmentStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    const userId = req.user?.id || 'unknown';
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(7);
+
+    return {
+      folder: 'mijob/messages',
+      allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx'],
+      resource_type: 'auto', // Handles images and documents
+      public_id: `message-${userId}-${timestamp}-${randomString}`,
+    };
+  },
+});
+
+// ============================================
 // FILE FILTERS
 // ============================================
 
@@ -126,6 +183,25 @@ const documentFilter = (req, file, cb) => {
     cb(null, true);
   } else {
     cb(new Error('Invalid file type. Only JPEG, PNG, WebP and PDF files are allowed.'), false);
+  }
+};
+
+// Message attachment filter
+const messageAttachmentFilter = (req, file, cb) => {
+  const allowedMimeTypes = [
+    'image/jpeg',
+    'image/jpg', 
+    'image/png',
+    'image/webp',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ];
+
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Type de fichier invalide. Seuls les formats JPEG, PNG, WebP, PDF et DOC sont autorisés.'), false);
   }
 };
 
@@ -178,6 +254,129 @@ const uploadMultipleDocuments = multer({
     files: 5 // Maximum 5 files
   }
 });
+
+// Multiple files upload for registration (no auth required)
+const uploadRegistrationFiles = multer({
+  storage: registrationStorage,
+  fileFilter: documentFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB per file
+    files: 10 // Maximum 10 files total
+  }
+});
+
+// ============================================
+// DYNAMIC UPLOAD FUNCTIONS
+// ============================================
+
+/**
+ * Create a dynamic single file upload middleware
+ * @param {string} fieldName - The field name for the file in the form
+ * @param {string} uploadType - Type of upload ('messages', 'profiles', 'documents', etc.)
+ * @returns {Function} Multer middleware
+ */
+const uploadSingle = (fieldName, uploadType = 'messages') => {
+  let storage;
+  let fileFilter;
+  let maxSize = 10 * 1024 * 1024; // Default 10MB
+
+  // Select storage and filter based on upload type
+  switch (uploadType) {
+    case 'messages':
+      storage = messageAttachmentStorage;
+      fileFilter = messageAttachmentFilter;
+      maxSize = 10 * 1024 * 1024; // 10MB
+      break;
+
+    case 'profiles':
+      storage = profilePhotoStorage;
+      fileFilter = imageFilter;
+      maxSize = 5 * 1024 * 1024; // 5MB
+      break;
+
+    case 'logos':
+      storage = logoStorage;
+      fileFilter = imageFilter;
+      maxSize = 5 * 1024 * 1024; // 5MB
+      break;
+
+    case 'documents':
+      storage = documentStorage;
+      fileFilter = documentFilter;
+      maxSize = 10 * 1024 * 1024; // 10MB
+      break;
+
+    case 'missions':
+      storage = missionImageStorage;
+      fileFilter = imageFilter;
+      maxSize = 5 * 1024 * 1024; // 5MB
+      break;
+
+    default:
+      storage = messageAttachmentStorage;
+      fileFilter = messageAttachmentFilter;
+      maxSize = 10 * 1024 * 1024; // 10MB
+  }
+
+  const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: {
+      fileSize: maxSize
+    }
+  });
+
+  return upload.single(fieldName);
+};
+
+/**
+ * Create a dynamic multiple files upload middleware
+ * @param {string} fieldName - The field name for the files in the form
+ * @param {string} uploadType - Type of upload
+ * @param {number} maxCount - Maximum number of files (default: 5)
+ * @returns {Function} Multer middleware
+ */
+const uploadMultiple = (fieldName, uploadType = 'messages', maxCount = 5) => {
+  let storage;
+  let fileFilter;
+  let maxSize = 10 * 1024 * 1024;
+
+  switch (uploadType) {
+    case 'messages':
+      storage = messageAttachmentStorage;
+      fileFilter = messageAttachmentFilter;
+      maxSize = 10 * 1024 * 1024;
+      break;
+
+    case 'documents':
+      storage = documentStorage;
+      fileFilter = documentFilter;
+      maxSize = 10 * 1024 * 1024;
+      break;
+
+    case 'missions':
+      storage = missionImageStorage;
+      fileFilter = imageFilter;
+      maxSize = 5 * 1024 * 1024;
+      break;
+
+    default:
+      storage = messageAttachmentStorage;
+      fileFilter = messageAttachmentFilter;
+      maxSize = 10 * 1024 * 1024;
+  }
+
+  const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: {
+      fileSize: maxSize,
+      files: maxCount
+    }
+  });
+
+  return upload.array(fieldName, maxCount);
+};
 
 // ============================================
 // ERROR HANDLING MIDDLEWARE
@@ -308,55 +507,6 @@ const getOptimizedUrl = (publicId, options = {}) => {
   });
 };
 
-
-// Add this AFTER the existing storage configurations and BEFORE the file filters
-
-// ============================================
-// MIXED STORAGE (For Registration - No Auth Required)
-// ============================================
-
-// This storage handles both profile photos and documents for registration
-const registrationStorage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    const timestamp = Date.now();
-    const fieldName = file.fieldname;
-    const randomString = Math.random().toString(36).substring(7);
-
-    // Determine folder and transformations based on field name
-    if (fieldName === 'photoProfil') {
-      return {
-        folder: 'mijob/profiles',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-        transformation: [
-          { width: 500, height: 500, crop: 'fill', gravity: 'face' },
-          { quality: 'auto' },
-          { fetch_format: 'auto' }
-        ],
-        public_id: `partimer-temp-${timestamp}-${randomString}`,
-      };
-    } else {
-      // For documents (cinFile, permisFile, autreDoc)
-      return {
-        folder: 'mijob/documents',
-        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-        resource_type: 'auto',
-        public_id: `${fieldName}-temp-${timestamp}-${randomString}`,
-      };
-    }
-  },
-});
-
-// Multiple files upload for registration (no auth required)
-const uploadRegistrationFiles = multer({
-  storage: registrationStorage,
-  fileFilter: documentFilter,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB per file
-    files: 10 // Maximum 10 files total
-  }
-});
-
 // ============================================
 // EXPORTS
 // ============================================
@@ -367,10 +517,12 @@ module.exports = {
   uploadDocument,
   uploadMissionImage,
   uploadMultipleDocuments,
+  uploadRegistrationFiles,
+  uploadSingle,
+  uploadMultiple,
   handleMulterError,
   deleteFile,
   deleteMultipleFiles,
   extractPublicId,
   getOptimizedUrl,
-  uploadRegistrationFiles, 
 };

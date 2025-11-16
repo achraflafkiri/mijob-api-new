@@ -326,6 +326,9 @@ const resendVerification = catchAsync(async (req, res, next) => {
 const login = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
 
+  
+  
+
   // Validation
   if (!email || !password) {
     return next(new AppError(400, 'Veuillez fournir email et mot de passe'));
@@ -333,6 +336,8 @@ const login = catchAsync(async (req, res, next) => {
 
   // Find user and include password field
   const user = await User.findOne({ email: email.toLowerCase() }).select('+password +active');
+
+  console.log("useruseruseruseruseruseruseruseruseruseruseruseruser: ", user.email);
 
   if (!user || !(await user.correctPassword(password, user.password))) {
     return next(new AppError(401, 'Email ou mot de passe incorrect'));

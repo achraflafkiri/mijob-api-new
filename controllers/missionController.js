@@ -231,7 +231,7 @@ exports.getAllMissions = async (req, res) => {
 
     // Execute query
     const missions = await Mission.find(query)
-      .populate('createdBy', 'companyName fullName city')
+      .populate('createdBy')
       .sort(sort)
       .skip(skip)
       .limit(Number(limit));

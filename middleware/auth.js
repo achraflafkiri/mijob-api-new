@@ -34,6 +34,8 @@ exports.protect = catchAsync(async (req, res, next) => {
   }
 
   // 3) Check if user still exists
+  // console.log("decoded.id: ", decoded.id);
+  
   const user = await User.findById(decoded.id).select('+active');
   if (!user) {
     return next(new AppError(401, 'The user belonging to this token no longer exists.'));
