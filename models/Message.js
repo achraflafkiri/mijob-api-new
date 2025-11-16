@@ -106,7 +106,7 @@ messageSchema.index({ createdAt: -1 });
 // ============================================================
 
 // Check if message is read by specific user
-messageSchema.virtual('isReadBy').get(function() {
+messageSchema.virtual('isReadBy').get(function () {
   return (userId) => {
     return this.readBy.some(read => read.user.toString() === userId.toString());
   };
@@ -117,7 +117,7 @@ messageSchema.virtual('isReadBy').get(function() {
 // ============================================================
 
 // Mark message as read by user
-messageSchema.methods.markAsRead = async function(userId) {
+messageSchema.methods.markAsRead = async function (userId) {
   // Check if already read
   const alreadyRead = this.readBy.some(
     read => read.user.toString() === userId.toString()
@@ -135,7 +135,7 @@ messageSchema.methods.markAsRead = async function(userId) {
 };
 
 // Edit message
-messageSchema.methods.editMessage = async function(newContent) {
+messageSchema.methods.editMessage = async function (newContent) {
   if (!this.originalContent) {
     this.originalContent = this.content;
   }
@@ -147,7 +147,7 @@ messageSchema.methods.editMessage = async function(newContent) {
 };
 
 // Soft delete message for user
-messageSchema.methods.deleteForUser = async function(userId) {
+messageSchema.methods.deleteForUser = async function (userId) {
   if (!this.deletedBy.includes(userId)) {
     this.deletedBy.push(userId);
     await this.save();
@@ -160,18 +160,26 @@ messageSchema.methods.deleteForUser = async function(userId) {
 // ============================================================
 
 // Get conversation messages with pagination
-messageSchema.statics.getConversationMessages = function(conversationId, page = 1, limit = 50) {
+// In models/Message.js - update getConversationMessages method
+messageSchema.statics.getConversationMessages = function (conversationId, page = 1, limit = 50, userId = null) {
   const skip = (page - 1) * limit;
-  
-  return this.find({ conversation: conversationId })
-    .populate('sender', 'firstName lastName nomComplet profilePicture userType')
+
+  let query = { conversation: conversationId };
+
+  // Exclude messages deleted by the current user
+  if (userId) {
+    query.deletedBy = { $ne: userId };
+  }
+
+  return this.find(query)
+    .populate('sender')
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);
 };
 
 // Get unread count for user in conversation
-messageSchema.statics.getUnreadCount = async function(conversationId, userId) {
+messageSchema.statics.getUnreadCount = async function (conversationId, userId) {
   return this.countDocuments({
     conversation: conversationId,
     sender: { $ne: userId },
@@ -181,7 +189,7 @@ messageSchema.statics.getUnreadCount = async function(conversationId, userId) {
 };
 
 // Mark all messages as read in conversation
-messageSchema.statics.markAllAsRead = async function(conversationId, userId) {
+messageSchema.statics.markAllAsRead = async function (conversationId, userId) {
   const unreadMessages = await this.find({
     conversation: conversationId,
     sender: { $ne: userId },

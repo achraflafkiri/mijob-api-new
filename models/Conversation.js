@@ -121,14 +121,8 @@ conversationSchema.virtual('otherParticipant').get(function() {
 // MIDDLEWARE
 // ============================================================
 
-// Auto-populate participants on find
-conversationSchema.pre(/^find/, function(next) {
-  this.populate({
-    path: 'participants',
-    select: 'firstName lastName nomComplet profilePicture companyLogo userType email'
-  });
-  next();
-});
+// REMOVED AUTO-POPULATE - Let controller handle it explicitly
+// This was causing the "Cannot read properties of undefined" error
 
 // ============================================================
 // INSTANCE METHODS
@@ -284,7 +278,7 @@ conversationSchema.statics.findOrCreate = async function(participant1, participa
   return conversation;
 };
 
-// Get user conversations with filters
+// Get user conversations with filters - FIXED VERSION
 conversationSchema.statics.getUserConversations = async function(userId, options = {}) {
   const {
     page = 1,
@@ -306,22 +300,45 @@ conversationSchema.statics.getUserConversations = async function(userId, options
     query.archivedBy = { $ne: userId };
   }
 
+  // EXPLICITLY POPULATE HERE instead of in middleware
   let conversations = await this.find(query)
+    .populate({
+      path: 'participants',
+      select: 'firstName lastName nomComplet raisonSociale profilePicture companyLogo userType email'
+    })
     .populate('lastMessage')
+    .populate({
+      path: 'relatedMission',
+      select: 'title status budget'
+    })
     .sort({ lastMessageAt: -1 })
     .skip(skip)
-    .limit(limit);
+    .limit(limit)
+    .lean(); // Use lean for better performance
+
+  // Ensure conversations is always an array
+  if (!conversations) {
+    conversations = [];
+  }
 
   // Apply search filter if provided
-  if (search) {
+  if (search && conversations.length > 0) {
     conversations = conversations.filter(conv => {
+      if (!conv.participants || !Array.isArray(conv.participants)) {
+        return false;
+      }
+
       const otherUser = conv.participants.find(
-        p => p._id.toString() !== userId.toString()
+        p => p && p._id && p._id.toString() !== userId.toString()
       );
+
+      if (!otherUser) {
+        return false;
+      }
       
       const searchLower = search.toLowerCase();
       const fullName = otherUser.userType === 'partimer'
-        ? `${otherUser.firstName} ${otherUser.lastName}`.toLowerCase()
+        ? `${otherUser.firstName || ''} ${otherUser.lastName || ''}`.toLowerCase()
         : (otherUser.nomComplet || otherUser.raisonSociale || '').toLowerCase();
       
       return fullName.includes(searchLower);
@@ -337,10 +354,17 @@ conversationSchema.statics.getTotalUnread = async function(userId) {
     participants: userId,
     active: true,
     archivedBy: { $ne: userId }
-  });
+  }).lean();
+
+  if (!conversations || conversations.length === 0) {
+    return 0;
+  }
 
   return conversations.reduce((total, conv) => {
-    return total + conv.getUnreadCount(userId);
+    const userUnread = (conv.unreadCounts || []).find(
+      uc => uc.user.toString() === userId.toString()
+    );
+    return total + (userUnread ? userUnread.count : 0);
   }, 0);
 };
 

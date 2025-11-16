@@ -58,7 +58,7 @@ const sendMessage = async (req, res) => {
       readBy: [{ user: senderId, readAt: new Date() }]
     });
 
-    await message.populate('sender', 'firstName lastName nomComplet profilePicture userType');
+    await message.populate('sender');
 
     // Update conversation
     await conversation.updateLastMessage(message._id);
@@ -99,7 +99,7 @@ const sendMessage = async (req, res) => {
 };
 
 // ============================================
-// GET CONVERSATION MESSAGES
+// GET CONVERSATION MESSAGES - FIXED VERSION
 // ============================================
 const getConversationMessages = async (req, res) => {
   try {
@@ -108,8 +108,9 @@ const getConversationMessages = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 50;
 
-    // Verify conversation exists
-    const conversation = await Conversation.findById(conversationId);
+    // Verify conversation exists and populate participants
+    const conversation = await Conversation.findById(conversationId)
+      .populate('participants');
     
     if (!conversation) {
       return res.status(404).json({
@@ -118,9 +119,16 @@ const getConversationMessages = async (req, res) => {
       });
     }
 
-    // Verify user is participant
+    // Verify participants array exists and user is participant
+    if (!conversation.participants || !Array.isArray(conversation.participants)) {
+      return res.status(500).json({
+        success: false,
+        message: 'Erreur de données de conversation'
+      });
+    }
+
     const isParticipant = conversation.participants.some(
-      p => p._id.toString() === userId
+      p => p && p._id && p._id.toString() === userId
     );
 
     if (!isParticipant) {
@@ -131,7 +139,8 @@ const getConversationMessages = async (req, res) => {
     }
 
     // Get messages
-    const messages = await Message.getConversationMessages(conversationId, page, limit);
+    // In messageController.js - update the call
+const messages = await Message.getConversationMessages(conversationId, page, limit, userId);
     
     // Get total count
     const total = await Message.countDocuments({ 

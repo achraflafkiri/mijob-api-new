@@ -1,4 +1,4 @@
-// controllers/conversationController.js
+// controllers/conversationController.js - FINAL FIXED VERSION
 
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
@@ -36,13 +36,32 @@ const getConversations = async (req, res) => {
 
     const total = await Conversation.countDocuments(query);
 
-    // Format response with additional info
-    const formattedConversations = conversations.map(conv => {
+    // Format response with additional info - FIXED: Handle both lean and non-lean objects
+    const formattedConversations = (conversations || []).map(conv => {
+      // Ensure participants array exists
+      if (!conv.participants || !Array.isArray(conv.participants)) {
+        console.error('Conversation has no participants:', conv._id);
+        return null;
+      }
+
       const otherUser = conv.participants.find(
-        p => p._id.toString() !== userId
+        p => p && p._id && p._id.toString() !== userId
       );
 
-      console.log("otherUser: ", otherUser);
+      // If no other user found, skip this conversation
+      if (!otherUser) {
+        console.error('Could not find other user in conversation:', conv._id);
+        return null;
+      }
+
+      // Handle both Mongoose documents and plain objects
+      const getUnreadCount = typeof conv.getUnreadCount === 'function'
+        ? conv.getUnreadCount(userId)
+        : getUnreadCountManual(conv, userId);
+
+      const isMuted = typeof conv.isMuted === 'function'
+        ? conv.isMuted(userId)
+        : isMutedManual(conv, userId);
       
       return {
         id: conv._id,
@@ -50,22 +69,22 @@ const getConversations = async (req, res) => {
         otherUser: {
           id: otherUser._id,
           name: otherUser.userType === 'partimer'
-            ? `${otherUser.firstName} ${otherUser.lastName}`
-            : otherUser.nomComplet || otherUser.raisonSociale,
-          profilePicture: otherUser.profilePicture || otherUser.companyLogo,
+            ? `${otherUser.firstName || ''} ${otherUser.lastName || ''}`.trim()
+            : otherUser.nomComplet || otherUser.raisonSociale || 'Utilisateur',
+          profilePicture: otherUser.profilePicture || otherUser.companyLogo || null,
           userType: otherUser.userType
         },
-        lastMessage: conv.lastMessage,
+        lastMessage: conv.lastMessage || null,
         lastMessageAt: conv.lastMessageAt,
-        unreadCount: conv.getUnreadCount(userId),
-        relatedMission: conv.relatedMission,
+        unreadCount: getUnreadCount,
+        relatedMission: conv.relatedMission || null,
         type: conv.type,
-        muted: conv.isMuted(userId),
+        muted: isMuted,
         blocked: conv.blocked,
         createdAt: conv.createdAt,
         updatedAt: conv.updatedAt
       };
-    });
+    }).filter(conv => conv !== null);
 
     res.status(200).json({
       success: true,
@@ -90,6 +109,29 @@ const getConversations = async (req, res) => {
   }
 };
 
+// Helper function to get unread count from plain object
+const getUnreadCountManual = (conv, userId) => {
+  if (!conv.unreadCounts || !Array.isArray(conv.unreadCounts)) {
+    return 0;
+  }
+  const userUnread = conv.unreadCounts.find(
+    uc => uc.user && uc.user.toString() === userId.toString()
+  );
+  return userUnread ? userUnread.count : 0;
+};
+
+// Helper function to check if muted from plain object
+const isMutedManual = (conv, userId) => {
+  if (!conv.mutedBy || !Array.isArray(conv.mutedBy)) {
+    return false;
+  }
+  const mute = conv.mutedBy.find(
+    m => m.user && m.user.toString() === userId.toString()
+  );
+  if (!mute) return false;
+  return new Date() < new Date(mute.mutedUntil);
+};
+
 // ============================================
 // GET SINGLE CONVERSATION
 // ============================================
@@ -99,6 +141,7 @@ const getConversation = async (req, res) => {
     const userId = req.user.id;
 
     const conversation = await Conversation.findById(conversationId)
+      .populate('participants')
       .populate('lastMessage')
       .populate('relatedMission', 'title status budget');
 
@@ -109,9 +152,17 @@ const getConversation = async (req, res) => {
       });
     }
 
+    // Verify participants are populated
+    if (!conversation.participants || !Array.isArray(conversation.participants)) {
+      return res.status(500).json({
+        success: false,
+        message: 'Erreur de données de conversation'
+      });
+    }
+
     // Verify user is participant
     const isParticipant = conversation.participants.some(
-      p => p._id.toString() === userId
+      p => p && p._id && p._id.toString() === userId
     );
 
     if (!isParticipant) {
@@ -122,8 +173,15 @@ const getConversation = async (req, res) => {
     }
 
     const otherUser = conversation.participants.find(
-      p => p._id.toString() !== userId
+      p => p && p._id && p._id.toString() !== userId
     );
+
+    if (!otherUser) {
+      return res.status(500).json({
+        success: false,
+        message: 'Impossible de trouver l\'autre participant'
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -134,15 +192,15 @@ const getConversation = async (req, res) => {
           otherUser: {
             id: otherUser._id,
             name: otherUser.userType === 'partimer'
-              ? `${otherUser.firstName} ${otherUser.lastName}`
-              : otherUser.nomComplet || otherUser.raisonSociale,
-            profilePicture: otherUser.profilePicture || otherUser.companyLogo,
+              ? `${otherUser.firstName || ''} ${otherUser.lastName || ''}`.trim()
+              : otherUser.nomComplet || otherUser.raisonSociale || 'Utilisateur',
+            profilePicture: otherUser.profilePicture || otherUser.companyLogo || null,
             userType: otherUser.userType
           },
-          lastMessage: conversation.lastMessage,
+          lastMessage: conversation.lastMessage || null,
           lastMessageAt: conversation.lastMessageAt,
           unreadCount: conversation.getUnreadCount(userId),
-          relatedMission: conversation.relatedMission,
+          relatedMission: conversation.relatedMission || null,
           type: conversation.type,
           muted: conversation.isMuted(userId),
           blocked: conversation.blocked,
@@ -170,6 +228,8 @@ const createConversation = async (req, res) => {
     const { otherUserId, missionId } = req.body;
     const userId = req.user.id;
 
+    console.log('Creating conversation:', { userId, otherUserId, missionId });
+
     if (!otherUserId) {
       return res.status(400).json({
         success: false,
@@ -187,18 +247,39 @@ const createConversation = async (req, res) => {
     }
 
     // Check if conversation already exists
-    const conversation = await Conversation.findOrCreate(
+    let conversation = await Conversation.findOrCreate(
       userId,
       otherUserId,
       missionId
     );
 
-    await conversation.populate('participants', 'firstName lastName nomComplet profilePicture companyLogo userType email');
-    await conversation.populate('relatedMission', 'title status budget');
+    console.log('Conversation found/created:', conversation._id);
+
+    // Manually populate if needed
+    await conversation.populate('participants');
+    if (missionId) {
+      await conversation.populate('relatedMission');
+    }
+
+    // Ensure participants are loaded
+    if (!conversation.participants || !Array.isArray(conversation.participants)) {
+      // Reload with populate
+      conversation = await Conversation.findById(conversation._id)
+        .populate('participants')
+        .populate('relatedMission');
+    }
 
     const formattedOtherUser = conversation.participants.find(
-      p => p._id.toString() !== userId
+      p => p && p._id && p._id.toString() !== userId
     );
+
+    if (!formattedOtherUser) {
+      console.error('Cannot find other user in participants');
+      return res.status(500).json({
+        success: false,
+        message: 'Erreur lors de la création de la conversation'
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -210,12 +291,12 @@ const createConversation = async (req, res) => {
           otherUser: {
             id: formattedOtherUser._id,
             name: formattedOtherUser.userType === 'partimer'
-              ? `${formattedOtherUser.firstName} ${formattedOtherUser.lastName}`
-              : formattedOtherUser.nomComplet || formattedOtherUser.raisonSociale,
-            profilePicture: formattedOtherUser.profilePicture || formattedOtherUser.companyLogo,
+              ? `${formattedOtherUser.firstName || ''} ${formattedOtherUser.lastName || ''}`.trim()
+              : formattedOtherUser.nomComplet || formattedOtherUser.raisonSociale || 'Utilisateur',
+            profilePicture: formattedOtherUser.profilePicture || formattedOtherUser.companyLogo || null,
             userType: formattedOtherUser.userType
           },
-          relatedMission: conversation.relatedMission,
+          relatedMission: conversation.relatedMission || null,
           type: conversation.type,
           createdAt: conversation.createdAt
         }
@@ -318,7 +399,7 @@ const unarchiveConversation = async (req, res) => {
 const muteConversation = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { duration } = req.body; // in hours, null for permanent
+    const { duration } = req.body;
     const userId = req.user.id;
 
     const conversation = await Conversation.findById(conversationId);
