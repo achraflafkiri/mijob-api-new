@@ -20,7 +20,7 @@ const sendMessage = async (req, res) => {
 
     // Verify conversation exists
     const conversation = await Conversation.findById(conversationId);
-    
+
     if (!conversation) {
       return res.status(404).json({
         success: false,
@@ -111,7 +111,7 @@ const getConversationMessages = async (req, res) => {
     // Verify conversation exists and populate participants
     const conversation = await Conversation.findById(conversationId)
       .populate('participants');
-    
+
     if (!conversation) {
       return res.status(404).json({
         success: false,
@@ -139,11 +139,10 @@ const getConversationMessages = async (req, res) => {
     }
 
     // Get messages
-    // In messageController.js - update the call
-const messages = await Message.getConversationMessages(conversationId, page, limit, userId);
-    
+    const messages = await Message.getConversationMessages(conversationId, page, limit, userId);
+
     // Get total count
-    const total = await Message.countDocuments({ 
+    const total = await Message.countDocuments({
       conversation: conversationId,
       deletedBy: { $ne: userId }
     });
@@ -192,7 +191,7 @@ const editMessage = async (req, res) => {
     }
 
     const message = await Message.findById(messageId);
-    
+
     if (!message) {
       return res.status(404).json({
         success: false,
@@ -247,7 +246,7 @@ const deleteMessage = async (req, res) => {
     const userId = req.user.id;
 
     const message = await Message.findById(messageId);
-    
+
     if (!message) {
       return res.status(404).json({
         success: false,
@@ -299,7 +298,7 @@ const markAsRead = async (req, res) => {
     const userId = req.user.id;
 
     const message = await Message.findById(messageId);
-    
+
     if (!message) {
       return res.status(404).json({
         success: false,
@@ -344,7 +343,7 @@ const markAllAsRead = async (req, res) => {
 
     // Verify conversation exists
     const conversation = await Conversation.findById(conversationId);
-    
+
     if (!conversation) {
       return res.status(404).json({
         success: false,
@@ -397,8 +396,8 @@ const uploadMessageAttachment = async (req, res) => {
 
     const attachment = {
       url: req.file.path,
-      type: req.file.mimetype.startsWith('image/') ? 'image' : 
-            req.file.mimetype === 'application/pdf' ? 'pdf' : 'document',
+      type: req.file.mimetype.startsWith('image/') ? 'image' :
+        req.file.mimetype === 'application/pdf' ? 'pdf' : 'document',
       name: req.file.originalname,
       size: req.file.size
     };

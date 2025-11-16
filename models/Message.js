@@ -173,7 +173,7 @@ messageSchema.statics.getConversationMessages = function (conversationId, page =
 
   return this.find(query)
     .populate('sender')
-    .sort({ createdAt: -1 })
+    .sort({ createdAt: 1 })
     .skip(skip)
     .limit(limit);
 };
