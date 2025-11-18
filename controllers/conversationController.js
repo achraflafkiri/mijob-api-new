@@ -226,7 +226,7 @@ const getConversation = async (req, res) => {
 const createConversation = async (req, res) => {
   try {
     const { otherUserId, missionId } = req.body;
-    const userId = req.user.id;
+    const userId = req.user.id; // ! i think particluier and entreprise id
 
     console.log('Creating conversation:', { userId, otherUserId, missionId });
 
