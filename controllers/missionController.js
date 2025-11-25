@@ -43,7 +43,7 @@ exports.createMission = async (req, res) => {
     if (!['entreprise', 'particulier'].includes(req.user.userType)) {
       return res.status(403).json({
         success: false,
-        message: 'Only entreprise and particulier can create missions'
+        message: 'Seuls les entreprises et particuliers peuvent créer des missions'
       });
     }
 
@@ -53,20 +53,42 @@ exports.createMission = async (req, res) => {
       const featuredCost = featuredListing ? 5 : 0;
       const totalTokenCost = baseTokenCost + featuredCost;
 
-      if (req.user.tokenBalance < totalTokenCost) {
+      // Check tokens.available field from User model
+      const availableTokens = req.user.tokens?.available || 0;
+
+      if (availableTokens < totalTokenCost) {
         return res.status(400).json({
           success: false,
-          message: `Insufficient tokens. You need ${totalTokenCost} tokens but have ${req.user.tokenBalance}`
+          message: `Jetons insuffisants. Vous avez besoin de ${totalTokenCost} jetons mais vous n'en avez que ${availableTokens}`,
+          required: totalTokenCost,
+          available: availableTokens
         });
       }
 
       // Deduct tokens
-      req.user.tokenBalance -= totalTokenCost;
+      req.user.tokens.available -= totalTokenCost;
+      req.user.tokens.used += totalTokenCost;
       await req.user.save();
     }
 
     // For entreprise: Check pack limits
     if (req.user.userType === 'entreprise') {
+      const userPlan = req.user.subscriptionPlan || 'none';
+
+      // FIRST: Check if user has NO subscription at all
+      if (userPlan === 'none' || !userPlan) {
+        return res.status(403).json({
+          success: false,
+          message: 'You need to subscribe to a package to create missions.',
+          details: {
+            subscriptionPlan: 'none',
+            required: 'Choisissez un pack: Basic (3 missions/mois), Standard (5 missions/mois) ou Premium (8 missions/mois)',
+            action: 'subscribe',
+            upgradeUrl: '/pricing'
+          }
+        });
+      }
+
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
 
@@ -78,20 +100,37 @@ exports.createMission = async (req, res) => {
         }
       });
 
+      // Pack limits based on User model's subscriptionPlan field
       const packLimits = {
-        basic: 3,
-        premium: 8
+        basic: 3,     // Basic = 3 missions/month
+        standard: 5,  // Standard = 5 missions/month
+        premium: 8    // Premium = 8 missions/month (can be made unlimited)
       };
 
-      if (missionsThisMonth >= packLimits[req.user.subscriptionPack]) {
+      const monthlyLimit = packLimits[userPlan];
+
+      // Check if user has exceeded their monthly limit
+      if (missionsThisMonth >= monthlyLimit) {
         return res.status(400).json({
           success: false,
-          message: `You have reached your monthly limit of ${packLimits[req.user.subscriptionPack]} missions`
+          message: `Vous avez atteint votre limite mensuelle de ${monthlyLimit} missions pour le pack ${userPlan}.`,
+          details: {
+            currentMissions: missionsThisMonth,
+            monthlyLimit: monthlyLimit,
+            subscriptionPlan: userPlan,
+            suggestion: userPlan === 'basic' 
+              ? 'Passez au pack Standard (5 missions/mois) ou Premium (8 missions/mois) pour publier plus de missions.'
+              : userPlan === 'standard'
+              ? 'Passez au pack Premium (8 missions/mois) pour publier plus de missions.'
+              : 'Contactez-nous pour augmenter votre limite.'
+          }
         });
       }
+
+      console.log(`✅ Entreprise mission limit check passed: ${missionsThisMonth}/${monthlyLimit} missions this month`);
     }
 
-    // Create mission
+    // Create mission data
     const missionData = {
       title,
       description,
@@ -110,21 +149,21 @@ exports.createMission = async (req, res) => {
       createdBy: req.user._id,
       creatorType: req.user.userType,
       featuredListing: req.user.userType === 'particulier' ? featuredListing : false,
-      isFeatured: req.user.userType === 'entreprise' && req.user.subscriptionPack === 'premium'
+      // Only premium entreprise accounts get featured listings
+      isFeatured: req.user.userType === 'entreprise' && req.user.subscriptionPlan === 'premium'
     };
 
-    // Add payment rates
+    // Add payment rates based on payment type
     if (paymentType === 'hourly') missionData.hourlyRate = hourlyRate;
     if (paymentType === 'daily') missionData.dailyRate = dailyRate;
     if (paymentType === 'flat') missionData.flatRate = flatRate;
 
-    // Add address/location - FIXED VERSION
+    // Add address/location for onsite work
     if (workType === 'onsite') {
       missionData.addressInputType = addressInputType;
 
       if (addressInputType === 'manual') {
         missionData.address = address;
-        // Don't set location for manual addresses without coordinates
         missionData.latitude = undefined;
         missionData.longitude = undefined;
       } else if (addressInputType === 'map') {
@@ -135,7 +174,7 @@ exports.createMission = async (req, res) => {
         } else {
           return res.status(400).json({
             success: false,
-            message: 'Coordinates are required when using map selection'
+            message: 'Les coordonnées sont requises lors de l\'utilisation de la sélection par carte'
           });
         }
       }
@@ -152,37 +191,93 @@ exports.createMission = async (req, res) => {
       missionData.requirements = requirements;
     }
 
+    // Create the mission
     const mission = await Mission.create(missionData);
+
+    // Update user statistics
+    if (req.user.statistics) {
+      req.user.statistics.missionsPosted = (req.user.statistics.missionsPosted || 0) + 1;
+      await req.user.save();
+    }
+
+    // Prepare response
+    const responseData = {
+      mission,
+      monthlyUsage: null,
+      tokensUsed: null,
+      remainingTokens: null
+    };
+
+    // Add entreprise-specific info
+    if (req.user.userType === 'entreprise') {
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      
+      const updatedCount = await Mission.countDocuments({
+        createdBy: req.user._id,
+        createdAt: {
+          $gte: new Date(currentYear, currentMonth, 1),
+          $lt: new Date(currentYear, currentMonth + 1, 1)
+        }
+      });
+
+      const packLimits = {
+        none: 0,
+        basic: 3,
+        standard: 5,
+        premium: 8
+      };
+
+      responseData.monthlyUsage = {
+        used: updatedCount,
+        limit: packLimits[req.user.subscriptionPlan || 'none'],
+        remaining: packLimits[req.user.subscriptionPlan || 'none'] - updatedCount,
+        plan: req.user.subscriptionPlan || 'none'
+      };
+    }
+
+    // Add particulier-specific info
+    if (req.user.userType === 'particulier') {
+      responseData.tokensUsed = mission.tokenCost.total;
+      responseData.remainingTokens = req.user.tokens?.available || 0;
+    }
 
     res.status(201).json({
       success: true,
-      message: 'Mission created successfully',
-      data: {
-        mission,
-        tokensUsed: req.user.userType === 'particulier' ? mission.tokenCost.total : null,
-        remainingTokens: req.user.userType === 'particulier' ? req.user.tokenBalance : null
-      }
+      message: 'Mission créée avec succès',
+      data: responseData
     });
 
   } catch (error) {
-    console.error('Create mission error:', error);
+    console.error('❌ Create mission error:', error);
 
-    // More specific error handling for geospatial errors
+    // Handle geospatial errors
     if (error.code === 16755 || error.message.includes('geo keys')) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid location data provided',
-        error: 'Please provide valid coordinates or use manual address input'
+        message: 'Données de localisation invalides',
+        error: 'Veuillez fournir des coordonnées valides ou utiliser la saisie manuelle d\'adresse'
+      });
+    }
+
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Erreur de validation',
+        errors: messages
       });
     }
 
     res.status(500).json({
       success: false,
-      message: 'Error creating mission',
-      error: error.message
+      message: 'Erreur lors de la création de la mission',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Erreur serveur'
     });
   }
 };
+
 
 // ============================================
 // GET MISSIONS

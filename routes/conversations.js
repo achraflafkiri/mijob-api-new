@@ -1,8 +1,13 @@
-// routes/conversations.js
+// routes/conversations.js - UPDATED WITH CONTACT LIMITS
 
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { 
+  checkContactLimit, 
+  requireSubscription 
+} = require('../middleware/contactLimits');
+
 const {
   getConversations,
   getConversation,
@@ -20,14 +25,35 @@ const {
 // All routes require authentication
 router.use(protect);
 
-// Conversation routes
+// ============================================
+// CONVERSATION ROUTES
+// ============================================
+
+// Get all conversations (no limits needed)
 router.get('/', getConversations);
-router.post('/', createConversation);
+
+// Create new conversation - WITH CONTACT LIMITS
+// This is where entreprise users contact partimers (candidats)
+router.post(
+  '/', 
+  requireSubscription,  // First check if has subscription
+  checkContactLimit,     // Then check monthly contact limit
+  createConversation
+);
+
+// Get unread count (no limits needed)
 router.get('/unread-count', getUnreadCount);
+
+// Get single conversation (no limits needed)
 router.get('/:conversationId', getConversation);
+
+// Delete conversation (no limits needed)
 router.delete('/:conversationId', deleteConversation);
 
-// Conversation actions
+// ============================================
+// CONVERSATION ACTIONS (no limits needed)
+// ============================================
+
 router.post('/:conversationId/archive', archiveConversation);
 router.post('/:conversationId/unarchive', unarchiveConversation);
 router.post('/:conversationId/mute', muteConversation);

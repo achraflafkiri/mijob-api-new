@@ -1,4 +1,4 @@
-// routes/missionRoutes.js - COMPLETE MISSION ROUTES
+// routes/missions.js - UPDATED WITH LIMIT MIDDLEWARE
 
 const express = require('express');
 const router = express.Router();
@@ -31,62 +31,54 @@ const {
 // Import auth middleware
 const { protect, authorize } = require('../middleware/auth');
 
+// Import mission limits middleware
+const { 
+  checkMissionCreationLimits,
+  checkEntrepriseMissionLimit,
+  checkParticulierTokens 
+} = require('../middleware/missionLimits');
+
 // ============================================
-// PUBLIC ROUTES - No authentication required
+// PUBLIC ROUTES
 // ============================================
 
-// @route   GET /api/missions
-// @desc    Get all active missions with filters and pagination
-// @access  Public
 router.get('/', getAllMissions);
-
-// @route   GET /api/missions/active
-// @desc    Get all active (published, not expired) missions
-// @access  Public
 router.get('/active', getActiveMissions);
-
-// @route   GET /api/missions/featured
-// @desc    Get featured missions
-// @access  Public
 router.get('/featured', getFeaturedMissions);
-
-// @route   GET /api/missions/search
-// @desc    Search missions with advanced filters
-// @access  Public
 router.get('/search', searchMissions);
-
-// @route   GET /api/missions/location
-// @desc    Get missions by location (within radius)
-// @access  Public
 router.get('/location', getMissionsByLocation);
-
-// @route   GET /api/missions/:id
-// @desc    Get single mission by ID (increments views)
-// @access  Public
 router.get('/:id', getMissionById);
-
-// @route   PUT /api/missions/:id/views
-// @desc    Increment mission views
-// @access  Public
 router.put('/:id/views', incrementMissionViews);
 
 // ============================================
-// PROTECTED ROUTES - Authentication required
+// PROTECTED ROUTES - MISSION CREATION
 // ============================================
 
 // @route   POST /api/missions
-// @desc    Create new mission
+// @desc    Create new mission (with automatic limit checking)
 // @access  Private (Entreprise/Particulier only)
 router.post(
   '/',
   protect,
   authorize('entreprise', 'particulier'),
+  checkMissionCreationLimits,  // ✅ NEW: Automatically checks limits
   createMission
 );
 
-// @route   GET /api/missions/my/all
-// @desc    Get all missions created by logged-in user
-// @access  Private (Entreprise/Particulier only)
+// Alternative: Use specific middleware based on user type
+// router.post(
+//   '/',
+//   protect,
+//   authorize('entreprise', 'particulier'),
+//   checkEntrepriseMissionLimit,  // Checks entreprise monthly limits
+//   checkParticulierTokens,        // Checks particulier token balance
+//   createMission
+// );
+
+// ============================================
+// PROTECTED ROUTES - USER MISSIONS
+// ============================================
+
 router.get(
   '/my/all',
   protect,
@@ -94,9 +86,6 @@ router.get(
   getMyMissions
 );
 
-// @route   GET /api/missions/my/status/:status
-// @desc    Get user's missions by status (draft, published, completed, etc.)
-// @access  Private (Entreprise/Particulier only)
 router.get(
   '/my/status/:status',
   protect,
@@ -104,9 +93,6 @@ router.get(
   getMissionsByStatus
 );
 
-// @route   GET /api/missions/my/stats
-// @desc    Get mission statistics for recruiter
-// @access  Private (Entreprise/Particulier only)
 router.get(
   '/my/stats',
   protect,
@@ -114,9 +100,6 @@ router.get(
   getMissionStats
 );
 
-// @route   GET /api/missions/recruiter/dashboard
-// @desc    Get all missions for recruiter dashboard
-// @access  Private (Entreprise/Particulier only)
 router.get(
   '/recruiter/dashboard',
   protect,
@@ -124,9 +107,10 @@ router.get(
   getRecruiterMissions
 );
 
-// @route   PUT /api/missions/:id
-// @desc    Update mission (only if no applications or owner only)
-// @access  Private (Owner only)
+// ============================================
+// PROTECTED ROUTES - MISSION MANAGEMENT
+// ============================================
+
 router.put(
   '/:id',
   protect,
@@ -134,9 +118,6 @@ router.put(
   updateMission
 );
 
-// @route   DELETE /api/missions/:id
-// @desc    Delete mission
-// @access  Private (Owner only)
 router.delete(
   '/:id',
   protect,
@@ -144,9 +125,6 @@ router.delete(
   deleteMission
 );
 
-// @route   PUT /api/missions/:id/cancel
-// @desc    Cancel mission
-// @access  Private (Owner only)
 router.put(
   '/:id/cancel',
   protect,
@@ -154,9 +132,6 @@ router.put(
   cancelMission
 );
 
-// @route   PUT /api/missions/:id/complete
-// @desc    Mark mission as completed
-// @access  Private (Owner only)
 router.put(
   '/:id/complete',
   protect,
@@ -168,9 +143,6 @@ router.put(
 // APPLICATION ROUTES
 // ============================================
 
-// @route   POST /api/missions/:id/apply
-// @desc    Apply to a mission
-// @access  Private (Partimer only)
 router.post(
   '/:id/apply',
   protect,
@@ -178,9 +150,6 @@ router.post(
   applyToMission
 );
 
-// @route   GET /api/missions/:id/applications
-// @desc    Get all applications for a mission
-// @access  Private (Mission owner only)
 router.get(
   '/:id/applications',
   protect,
@@ -188,9 +157,6 @@ router.get(
   getMissionApplications
 );
 
-// @route   PUT /api/missions/:missionId/applications/:applicationId
-// @desc    Update application status (accept/reject)
-// @access  Private (Mission owner only)
 router.put(
   '/:missionId/applications/:applicationId',
   protect,
@@ -198,9 +164,6 @@ router.put(
   updateApplicationStatus
 );
 
-// @route   GET /api/missions/partimer/applied
-// @desc    Get all missions partimer has applied to
-// @access  Private (Partimer only)
 router.get(
   '/partimer/applied',
   protect,
@@ -212,9 +175,6 @@ router.get(
 // ADMIN/SYSTEM ROUTES
 // ============================================
 
-// @route   PUT /api/missions/system/check-expiration
-// @desc    Check and update expired missions (system cron job)
-// @access  Private (Admin only - to be called by cron)
 router.put(
   '/system/check-expiration',
   protect,
@@ -222,7 +182,4 @@ router.put(
   checkMissionExpiration
 );
 
-// ============================================
-// EXPORT ROUTER
-// ============================================
 module.exports = router;

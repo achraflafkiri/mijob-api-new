@@ -72,6 +72,7 @@ app.use('/api/v1/missions', require('./routes/missions'));
 app.use('/api/v1/partimers', require('./routes/partimer'));
 app.use('/api/v1/messages', require('./routes/messages'));
 app.use('/api/v1/conversations', require('./routes/conversations'));
+app.use('/api/v1/subscriptions', require('./routes/subscriptions')); 
 
 // Health check
 app.get('/', (req, res) => {

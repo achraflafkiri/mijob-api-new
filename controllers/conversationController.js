@@ -643,6 +643,183 @@ const getUnreadCount = async (req, res) => {
   }
 };
 
+// Add these functions to controllers/conversationController.js
+
+/**
+ * Get current month contact usage for entreprise
+ * @route   GET /api/v1/conversations/usage/current
+ * @access  Private (Entreprise only)
+ */
+exports.getContactUsage = async (req, res) => {
+  try {
+    if (req.user.userType !== 'entreprise') {
+      return res.status(403).json({
+        success: false,
+        message: 'Cette fonctionnalité est réservée aux entreprises'
+      });
+    }
+
+    const userId = req.user._id || req.user.id;
+    const userPlan = req.user.subscriptionPlan || 'none';
+
+    // Contact limits per plan
+    const contactLimits = {
+      none: 0,
+      basic: 5,
+      standard: 7,
+      premium: 10
+    };
+
+    const monthlyLimit = contactLimits[userPlan];
+
+    // Get current month and year
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    // Count conversations created this month
+    const contactsThisMonth = await Conversation.countDocuments({
+      participants: userId,
+      createdAt: {
+        $gte: new Date(currentYear, currentMonth, 1),
+        $lt: new Date(currentYear, currentMonth + 1, 1)
+      }
+    });
+
+    const canContact = contactsThisMonth < monthlyLimit;
+    const remaining = Math.max(0, monthlyLimit - contactsThisMonth);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        usage: {
+          used: contactsThisMonth,
+          limit: monthlyLimit,
+          remaining: remaining,
+          percentage: monthlyLimit > 0 ? Math.round((contactsThisMonth / monthlyLimit) * 100) : 0
+        },
+        subscription: {
+          plan: userPlan,
+          canContact: canContact,
+          nextResetDate: new Date(currentYear, currentMonth + 1, 1)
+        },
+        suggestions: getContactSuggestions(userPlan, contactsThisMonth, monthlyLimit)
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get contact usage error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des données d\'utilisation',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+/**
+ * Check if user can create new contact
+ * @route   GET /api/v1/conversations/usage/can-contact
+ * @access  Private (Entreprise only)
+ */
+exports.canContact = async (req, res) => {
+  try {
+    if (req.user.userType !== 'entreprise') {
+      return res.status(200).json({
+        success: true,
+        data: {
+          canContact: true,
+          reason: null,
+          userType: 'partimer' // or particulier
+        }
+      });
+    }
+
+    const userId = req.user._id || req.user.id;
+    const userPlan = req.user.subscriptionPlan || 'none';
+
+    // Check subscription first
+    if (userPlan === 'none' || !userPlan) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          canContact: false,
+          reason: 'Aucun abonnement actif',
+          subscriptionPlan: 'none',
+          action: 'subscribe'
+        }
+      });
+    }
+
+    const contactLimits = {
+      none: 0,
+      basic: 5,
+      standard: 7,
+      premium: 10
+    };
+
+    const monthlyLimit = contactLimits[userPlan];
+
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    const contactsThisMonth = await Conversation.countDocuments({
+      participants: userId,
+      createdAt: {
+        $gte: new Date(currentYear, currentMonth, 1),
+        $lt: new Date(currentYear, currentMonth + 1, 1)
+      }
+    });
+
+    const canContact = contactsThisMonth < monthlyLimit;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        canContact,
+        reason: canContact ? null : `Limite mensuelle atteinte (${monthlyLimit} contacts)`,
+        used: contactsThisMonth,
+        limit: monthlyLimit,
+        remaining: Math.max(0, monthlyLimit - contactsThisMonth),
+        plan: userPlan
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Can contact check error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la vérification',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Helper function
+function getContactSuggestions(plan, used, limit) {
+  const remaining = limit - used;
+  const suggestions = [];
+
+  if (remaining === 0) {
+    suggestions.push('Vous avez atteint votre limite mensuelle de contacts');
+    
+    if (plan === 'basic') {
+      suggestions.push('Passez au pack Standard pour 7 contacts/mois');
+      suggestions.push('Ou au pack Premium pour 10 contacts/mois');
+    } else if (plan === 'standard') {
+      suggestions.push('Passez au pack Premium pour 10 contacts/mois');
+    } else if (plan === 'none') {
+      suggestions.push('Souscrivez à un pack pour contacter des candidats');
+    }
+  } else if (remaining <= 1) {
+    suggestions.push(`Attention: il ne vous reste que ${remaining} contact(s)`);
+    suggestions.push('Pensez à upgrader votre pack avant la fin du mois');
+  } else if (remaining <= limit * 0.3) {
+    suggestions.push(`Il vous reste ${remaining} contacts ce mois-ci`);
+  }
+
+  return suggestions;
+}
+
 module.exports = {
   getConversations,
   getConversation,
