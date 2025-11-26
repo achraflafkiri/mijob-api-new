@@ -1,4 +1,4 @@
-// controllers/conversationController.js - FINAL FIXED VERSION
+// controllers/conversationController.js - UPDATED WITH TOKEN DEDUCTION
 
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
@@ -221,14 +221,15 @@ const getConversation = async (req, res) => {
 };
 
 // ============================================
-// CREATE CONVERSATION
+// CREATE CONVERSATION - UPDATED WITH TOKEN DEDUCTION
 // ============================================
 const createConversation = async (req, res) => {
   try {
     const { otherUserId, missionId } = req.body;
-    const userId = req.user.id; // ! i think particluier and entreprise id
+    const userId = req.user.id;
+    const userType = req.user.userType;
 
-    console.log('Creating conversation:', { userId, otherUserId, missionId });
+    console.log('Creating conversation:', { userId, userType, otherUserId, missionId });
 
     if (!otherUserId) {
       return res.status(400).json({
@@ -254,6 +255,10 @@ const createConversation = async (req, res) => {
     );
 
     console.log('Conversation found/created:', conversation._id);
+
+    // Check if this is a NEW conversation (just created)
+    const isNewConversation = conversation.createdAt && 
+      (new Date() - new Date(conversation.createdAt)) < 5000; // Created in last 5 seconds
 
     // Manually populate if needed
     await conversation.populate('participants');
@@ -281,26 +286,54 @@ const createConversation = async (req, res) => {
       });
     }
 
+    // Build response data
+    const responseData = {
+      conversation: {
+        id: conversation._id,
+        participants: conversation.participants,
+        otherUser: {
+          id: formattedOtherUser._id,
+          name: formattedOtherUser.userType === 'partimer'
+            ? `${formattedOtherUser.firstName || ''} ${formattedOtherUser.lastName || ''}`.trim()
+            : formattedOtherUser.nomComplet || formattedOtherUser.raisonSociale || 'Utilisateur',
+          profilePicture: formattedOtherUser.profilePicture || formattedOtherUser.companyLogo || null,
+          userType: formattedOtherUser.userType
+        },
+        relatedMission: conversation.relatedMission || null,
+        type: conversation.type,
+        createdAt: conversation.createdAt,
+        isNewConversation: isNewConversation
+      }
+    };
+
+    // Add token deduction info if particulier user and token was deducted
+    if (userType === 'particulier' && req.tokenDeducted) {
+      responseData.tokenInfo = {
+        deducted: true,
+        previousBalance: req.tokenDeducted.previousBalance,
+        newBalance: req.tokenDeducted.newBalance,
+        message: `1 jeton déduit - ${req.tokenDeducted.newBalance} jeton(s) restant(s)`
+      };
+      console.log(`🪙 Token deducted for conversation: ${conversation._id}`);
+    }
+
+    // Add contact usage info if entreprise user
+    if (userType === 'entreprise' && req.contactUsage) {
+      responseData.contactUsage = {
+        used: req.contactUsage.used + 1, // Add 1 for this conversation
+        limit: req.contactUsage.limit,
+        remaining: req.contactUsage.remaining - 1,
+        plan: req.contactUsage.plan
+      };
+      console.log(`📊 Contact used: ${req.contactUsage.used + 1}/${req.contactUsage.limit}`);
+    }
+
     res.status(200).json({
       success: true,
-      message: 'Conversation créée avec succès',
-      data: {
-        conversation: {
-          id: conversation._id,
-          participants: conversation.participants,
-          otherUser: {
-            id: formattedOtherUser._id,
-            name: formattedOtherUser.userType === 'partimer'
-              ? `${formattedOtherUser.firstName || ''} ${formattedOtherUser.lastName || ''}`.trim()
-              : formattedOtherUser.nomComplet || formattedOtherUser.raisonSociale || 'Utilisateur',
-            profilePicture: formattedOtherUser.profilePicture || formattedOtherUser.companyLogo || null,
-            userType: formattedOtherUser.userType
-          },
-          relatedMission: conversation.relatedMission || null,
-          type: conversation.type,
-          createdAt: conversation.createdAt
-        }
-      }
+      message: isNewConversation 
+        ? 'Conversation créée avec succès' 
+        : 'Conversation existante récupérée',
+      data: responseData
     });
 
   } catch (error) {
@@ -642,8 +675,6 @@ const getUnreadCount = async (req, res) => {
     });
   }
 };
-
-// Add these functions to controllers/conversationController.js
 
 /**
  * Get current month contact usage for entreprise

@@ -1,4 +1,4 @@
-// routes/missions.js - UPDATED WITH LIMIT MIDDLEWARE
+// routes/missions.js - UPDATED WITH TOKEN DEDUCTION MIDDLEWARE
 
 const express = require('express');
 const router = express.Router();
@@ -34,8 +34,7 @@ const { protect, authorize } = require('../middleware/auth');
 // Import mission limits middleware
 const { 
   checkMissionCreationLimits,
-  checkEntrepriseMissionLimit,
-  checkParticulierTokens 
+  deductMissionTokens  // NEW: Import token deduction middleware
 } = require('../middleware/missionLimits');
 
 // ============================================
@@ -54,26 +53,26 @@ router.put('/:id/views', incrementMissionViews);
 // PROTECTED ROUTES - MISSION CREATION
 // ============================================
 
-// @route   POST /api/missions
-// @desc    Create new mission (with automatic limit checking)
-// @access  Private (Entreprise/Particulier only)
+/**
+ * @route   POST /api/v1/missions
+ * @desc    Create new mission with automatic limit/token checking
+ * @access  Private (Entreprise/Particulier only)
+ * 
+ * MIDDLEWARE FLOW:
+ * 1. protect - Verify JWT token
+ * 2. authorize - Check user type (entreprise or particulier)
+ * 3. checkMissionCreationLimits - Check limits/tokens BEFORE creation
+ * 4. createMission - Create the mission
+ * 5. deductMissionTokens - Deduct tokens AFTER creation (particulier only)
+ */
 router.post(
   '/',
   protect,
   authorize('entreprise', 'particulier'),
-  checkMissionCreationLimits,  // ✅ NEW: Automatically checks limits
-  createMission
+  checkMissionCreationLimits,  // ✅ Checks entreprise limits OR particulier tokens
+  createMission,                // ✅ Creates the mission
+  deductMissionTokens          // ✅ NEW: Deducts tokens for particuliers
 );
-
-// Alternative: Use specific middleware based on user type
-// router.post(
-//   '/',
-//   protect,
-//   authorize('entreprise', 'particulier'),
-//   checkEntrepriseMissionLimit,  // Checks entreprise monthly limits
-//   checkParticulierTokens,        // Checks particulier token balance
-//   createMission
-// );
 
 // ============================================
 // PROTECTED ROUTES - USER MISSIONS

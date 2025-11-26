@@ -1,12 +1,19 @@
-// routes/conversations.js - UPDATED WITH CONTACT LIMITS
+// routes/conversations.js - UPDATED WITH TOKEN DEDUCTION FOR PARTICULIERS
 
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+
+// Import both middleware for entreprise and particulier
 const { 
   checkContactLimit, 
   requireSubscription 
 } = require('../middleware/contactLimits');
+
+const {
+  checkTokenAvailability,
+  deductToken
+} = require('../middleware/tokenLimits');
 
 const {
   getConversations,
@@ -32,13 +39,25 @@ router.use(protect);
 // Get all conversations (no limits needed)
 router.get('/', getConversations);
 
-// Create new conversation - WITH CONTACT LIMITS
-// This is where entreprise users contact partimers (candidats)
+// Create new conversation - WITH MULTI-USER TYPE SUPPORT
+// This route now handles:
+// - Entreprise users: Check subscription + contact limits
+// - Particulier users: Check token availability + deduct token
+// - Partimer users: No restrictions (can receive messages, not initiate)
 router.post(
   '/', 
-  requireSubscription,  // First check if has subscription
-  checkContactLimit,     // Then check monthly contact limit
-  createConversation
+  // ENTREPRISE MIDDLEWARE (runs only for entreprise users)
+  requireSubscription,     // First check if entreprise has subscription
+  checkContactLimit,       // Then check monthly contact limit for entreprise
+  
+  // PARTICULIER MIDDLEWARE (runs only for particulier users)
+  checkTokenAvailability,  // Check if particulier has tokens
+  
+  // CREATE CONVERSATION
+  createConversation,      // Create the conversation
+  
+  // PARTICULIER POST-CREATION (runs only for particulier users)
+  deductToken              // Deduct token AFTER successful creation
 );
 
 // Get unread count (no limits needed)

@@ -73,6 +73,7 @@ app.use('/api/v1/partimers', require('./routes/partimer'));
 app.use('/api/v1/messages', require('./routes/messages'));
 app.use('/api/v1/conversations', require('./routes/conversations'));
 app.use('/api/v1/subscriptions', require('./routes/subscriptions')); 
+app.use('/api/v1/tokens', require('./routes/tokens')); 
 
 // Health check
 app.get('/', (req, res) => {
