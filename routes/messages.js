@@ -1,4 +1,4 @@
-// routes/messages.js
+// routes/messages.js - ADD NEW ROUTES
 
 const express = require('express');
 const router = express.Router();
@@ -8,6 +8,8 @@ const {
   getConversationMessages,
   editMessage,
   deleteMessage,
+  deleteMessageForMe,
+  deleteMessageForEveryone,
   markAsRead,
   markAllAsRead,
   uploadMessageAttachment
@@ -21,7 +23,12 @@ router.use(protect);
 router.post('/', sendMessage);
 router.get('/conversation/:conversationId', getConversationMessages);
 router.put('/:messageId', editMessage);
-router.delete('/:messageId', deleteMessage);
+
+// 🆕 DELETE ROUTES
+router.delete('/:messageId', deleteMessage); // Default: delete for me
+router.delete('/:messageId/for-me', deleteMessageForMe); // Explicit: delete for me
+router.delete('/:messageId/for-everyone', deleteMessageForEveryone); // Delete for everyone
+
 router.post('/:messageId/read', markAsRead);
 router.post('/conversation/:conversationId/read-all', markAllAsRead);
 

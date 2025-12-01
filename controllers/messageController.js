@@ -1,15 +1,16 @@
 // controllers/messageController.js
-
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 
 // ============================================
-// SEND MESSAGE (HTTP fallback)
+// SEND MESSAGE (HTTP fallback) - FINAL FIX
 // ============================================
 const sendMessage = async (req, res) => {
   try {
     const { conversationId, content, type = 'text', attachments = [] } = req.body;
     const senderId = req.user.id;
+
+    console.log('📥 Received message data:', { conversationId, content, type, attachments });
 
     if (!conversationId || !content) {
       return res.status(400).json({
@@ -48,17 +49,41 @@ const sendMessage = async (req, res) => {
       });
     }
 
-    // Create message
-    const message = await Message.create({
+    // 🔧 FILTER AND VALIDATE ATTACHMENTS
+    const validAttachments = Array.isArray(attachments)
+      ? attachments.filter(att =>
+        att &&
+        att.url &&
+        att.type &&
+        att.name &&
+        typeof att.size === 'number'
+      )
+      : [];
+
+    console.log('✅ Valid attachments:', validAttachments);
+
+    // 🔧 BUILD MESSAGE DATA - ONLY INCLUDE ATTACHMENTS IF NOT EMPTY
+    const messageData = {
       conversation: conversationId,
       sender: senderId,
       content,
       type,
-      attachments,
       readBy: [{ user: senderId, readAt: new Date() }]
-    });
+    };
+
+    // Only add attachments if there are valid ones
+    if (validAttachments.length > 0) {
+      messageData.attachments = validAttachments;
+    }
+
+    console.log('📝 Creating message with data:', messageData);
+
+    // Create message
+    const message = await Message.create(messageData);
 
     await message.populate('sender');
+
+    console.log('✅ Message created:', message._id);
 
     // Update conversation
     await conversation.updateLastMessage(message._id);
@@ -89,7 +114,7 @@ const sendMessage = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Send message error:', error);
+    console.error('❌ Send message error:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de l\'envoi du message',
@@ -238,58 +263,6 @@ const editMessage = async (req, res) => {
 };
 
 // ============================================
-// DELETE MESSAGE
-// ============================================
-const deleteMessage = async (req, res) => {
-  try {
-    const { messageId } = req.params;
-    const userId = req.user.id;
-
-    const message = await Message.findById(messageId);
-
-    if (!message) {
-      return res.status(404).json({
-        success: false,
-        message: 'Message non trouvé'
-      });
-    }
-
-    // Verify sender
-    if (message.sender.toString() !== userId) {
-      return res.status(403).json({
-        success: false,
-        message: 'Vous ne pouvez supprimer que vos propres messages'
-      });
-    }
-
-    await message.deleteForUser(userId);
-
-    // Emit via Socket.IO
-    const io = req.app.get('io');
-    if (io) {
-      io.to(`conversation:${message.conversation}`).emit('message:deleted', {
-        messageId,
-        deletedBy: userId,
-        timestamp: new Date()
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: 'Message supprimé avec succès'
-    });
-
-  } catch (error) {
-    console.error('Delete message error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Erreur lors de la suppression du message',
-      error: error.message
-    });
-  }
-};
-
-// ============================================
 // MARK MESSAGE AS READ
 // ============================================
 const markAsRead = async (req, res) => {
@@ -385,6 +358,9 @@ const markAllAsRead = async (req, res) => {
 // ============================================
 // UPLOAD MESSAGE ATTACHMENT
 // ============================================
+// ============================================
+// UPLOAD MESSAGE ATTACHMENT
+// ============================================
 const uploadMessageAttachment = async (req, res) => {
   try {
     if (!req.file) {
@@ -394,22 +370,39 @@ const uploadMessageAttachment = async (req, res) => {
       });
     }
 
-    const attachment = {
-      url: req.file.path,
-      type: req.file.mimetype.startsWith('image/') ? 'image' :
-        req.file.mimetype === 'application/pdf' ? 'pdf' : 'document',
-      name: req.file.originalname,
-      size: req.file.size
-    };
+    console.log('📎 File uploaded:', {
+      path: req.file.path,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      originalname: req.file.originalname
+    });
 
+    // Determine file type
+    let fileType = 'document';
+    if (req.file.mimetype.startsWith('image/')) {
+      fileType = 'image';
+    } else if (req.file.mimetype === 'application/pdf') {
+      fileType = 'pdf';
+    } else if (
+      req.file.mimetype === 'application/msword' ||
+      req.file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
+      fileType = 'document';
+    }
+
+    // Return attachment data directly at root level
     res.status(200).json({
       success: true,
       message: 'Fichier téléchargé avec succès',
-      data: { attachment }
+      url: req.file.path,
+      type: fileType,
+      name: req.file.originalname,
+      size: req.file.size,
+      mimeType: req.file.mimetype
     });
 
   } catch (error) {
-    console.error('Upload attachment error:', error);
+    console.error('❌ Upload attachment error:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors du téléchargement du fichier',
@@ -418,6 +411,159 @@ const uploadMessageAttachment = async (req, res) => {
   }
 };
 
+
+// ============================================
+// DELETE MESSAGE FOR ME
+// ============================================
+const deleteMessageForMe = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    console.log(`🗑️ Delete for me - User: ${userId}, Message: ${messageId}`);
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      console.error(`❌ Message not found: ${messageId}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Message non trouvé'
+      });
+    }
+
+    // Verify user is in the conversation
+    const conversation = await Conversation.findById(message.conversation);
+    
+    if (!conversation) {
+      console.error(`❌ Conversation not found: ${message.conversation}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Conversation non trouvée'
+      });
+    }
+
+    const isParticipant = conversation.participants.some(
+      p => p._id.toString() === userId
+    );
+
+    if (!isParticipant) {
+      console.error(`❌ User ${userId} not authorized`);
+      return res.status(403).json({
+        success: false,
+        message: 'Accès non autorisé'
+      });
+    }
+
+    // Call the deleteForMe method
+    await message.deleteForMe(userId);
+
+    console.log(`✅ Message ${messageId} deleted for user ${userId}`);
+
+    // Emit via Socket.IO - only to this user
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user:${userId}`).emit('message:deleted-for-me', {
+        messageId,
+        conversationId: message.conversation.toString(),
+        timestamp: new Date()
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Message supprimé pour vous'
+    });
+
+  } catch (error) {
+    console.error('❌ Delete message for me error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la suppression du message',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// DELETE MESSAGE FOR EVERYONE
+// ============================================
+const deleteMessageForEveryone = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    console.log(`🗑️ Delete for everyone - User: ${userId}, Message: ${messageId}`);
+
+    const message = await Message.findById(messageId).populate('sender');
+
+    if (!message) {
+      console.error(`❌ Message not found: ${messageId}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Message non trouvé'
+      });
+    }
+
+    // Verify sender
+    if (message.sender._id.toString() !== userId) {
+      console.error(`❌ User ${userId} is not the sender`);
+      return res.status(403).json({
+        success: false,
+        message: 'Vous ne pouvez supprimer que vos propres messages'
+      });
+    }
+
+    // Check if can delete for everyone (within 48 hours)
+    // if (!message.canDeleteForEveryone(userId)) {
+    //   console.error(`❌ Message ${messageId} cannot be deleted (too old or already deleted)`);
+    //   return res.status(403).json({
+    //     success: false,
+    //     message: 'Vous pouvez seulement supprimer les messages envoyés dans les dernières 48 heures'
+    //   });
+    // }
+
+    // Call the deleteForEveryone method
+    await message.deleteForEveryone(userId);
+
+    console.log(`✅ Message ${messageId} deleted for everyone`);
+
+    // Emit via Socket.IO - to all users in conversation
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`conversation:${message.conversation}`).emit('message:deleted-for-everyone', {
+        messageId,
+        conversationId: message.conversation.toString(),
+        deletedBy: userId,
+        timestamp: new Date()
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Message supprimé pour tout le monde',
+      data: { message }
+    });
+
+  } catch (error) {
+    console.error('❌ Delete message for everyone error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la suppression du message',
+      error: error.message
+    });
+  }
+};
+
+// ============================================
+// BACKWARD COMPATIBILITY - DELETE MESSAGE
+// ============================================
+const deleteMessage = async (req, res) => {
+  // This now defaults to "delete for me"
+  return deleteMessageForMe(req, res);
+};
+
+
 module.exports = {
   sendMessage,
   getConversationMessages,
@@ -425,5 +571,8 @@ module.exports = {
   deleteMessage,
   markAsRead,
   markAllAsRead,
-  uploadMessageAttachment
+  uploadMessageAttachment,
+  deleteMessageForMe,
+  deleteMessageForEveryone,
+  deleteMessage,
 };

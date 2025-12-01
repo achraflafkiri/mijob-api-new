@@ -1,7 +1,9 @@
 // middleware/tokenLimits.js
 // Middleware to check and deduct tokens for particulier users when creating conversations
+// UPDATED WITH TOKEN MODEL for transaction history
 
 const User = require('../models/User');
+const Token = require('../models/Token');
 
 /**
  * Check if particulier user has available tokens for conversation
@@ -16,17 +18,9 @@ exports.checkTokenAvailability = async (req, res, next) => {
 
     const userId = req.user._id || req.user.id;
     
-    // Get fresh user data to ensure token balance is accurate
-    const user = await User.findById(userId).select('tokens userType');
-    
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'Utilisateur non trouvé'
-      });
-    }
-
-    const availableTokens = user.tokens?.available || 0;
+    // ✨ Use Token model instead of User.tokens
+    const tokenDoc = await Token.findOrCreate(userId);
+    const availableTokens = tokenDoc.balance;
 
     console.log(`🪙 Token check - User: ${userId}, Available: ${availableTokens}`);
 
@@ -66,7 +60,7 @@ exports.checkTokenAvailability = async (req, res, next) => {
 
 /**
  * Deduct token after successful conversation creation
- * @desc Called after conversation is created to deduct 1 token
+ * @desc Called after conversation is created to deduct 1 token WITH TRANSACTION HISTORY
  */
 exports.deductToken = async (req, res, next) => {
   try {
@@ -77,33 +71,42 @@ exports.deductToken = async (req, res, next) => {
 
     const userId = req.user._id || req.user.id;
     
-    // Get fresh user data
+    // ✨ Use Token model for transaction history
+    const tokenDoc = await Token.findOrCreate(userId);
+    const previousBalance = tokenDoc.balance;
+
+    // Add transaction with conversation reference
+    tokenDoc.addTransaction({
+      type: 'used',
+      amount: 1,
+      reason: 'Création de conversation',
+      relatedConversationId: req.conversation?._id, // If available from controller
+      metadata: {
+        action: 'conversation_creation',
+        conversationType: 'recruiter_to_partimer'
+      }
+    });
+
+    await tokenDoc.save();
+
+    // Sync with User model for backward compatibility
     const user = await User.findById(userId);
-    
-    if (!user) {
-      console.error('❌ User not found for token deduction');
-      return next(); // Continue anyway, conversation was already created
+    if (user && user.tokens) {
+      user.tokens.available = tokenDoc.balance;
+      user.tokens.used = tokenDoc.totalUsed;
+      await user.save();
     }
 
-    // Deduct 1 token
-    const previousAvailable = user.tokens?.available || 0;
-    
-    user.tokens.available = Math.max(0, (user.tokens.available || 0) - 1);
-    user.tokens.used = (user.tokens.used || 0) + 1;
-    
-    await user.save();
-
-    const newAvailable = user.tokens.available;
-
-    console.log(`✅ Token deducted - User: ${userId}, Before: ${previousAvailable}, After: ${newAvailable}`);
-    console.log(`📊 Token usage - Available: ${newAvailable}, Used: ${user.tokens.used}, Purchased: ${user.tokens.purchased}`);
+    console.log(`✅ Token deducted - User: ${userId}, Before: ${previousBalance}, After: ${tokenDoc.balance}`);
+    console.log(`📊 Token usage - Available: ${tokenDoc.balance}, Used: ${tokenDoc.totalUsed}, Purchased: ${tokenDoc.totalPurchased}`);
 
     // Attach updated token info to request
     req.tokenDeducted = {
       success: true,
-      previousBalance: previousAvailable,
-      newBalance: newAvailable,
-      used: user.tokens.used
+      previousBalance: previousBalance,
+      newBalance: tokenDoc.balance,
+      used: tokenDoc.totalUsed,
+      transactionId: tokenDoc.transactions[tokenDoc.transactions.length - 1]._id
     };
 
     next();
@@ -132,25 +135,16 @@ exports.getTokenStatus = async (req, res, next) => {
     }
 
     const userId = req.user._id || req.user.id;
-    const user = await User.findById(userId).select('tokens');
     
-    if (!user) {
-      req.tokenStatus = {
-        userType: 'particulier',
-        hasTokens: false,
-        available: 0
-      };
-      return next();
-    }
-
-    const availableTokens = user.tokens?.available || 0;
+    // ✨ Use Token model
+    const tokenDoc = await Token.findOrCreate(userId);
 
     req.tokenStatus = {
       userType: 'particulier',
-      hasTokens: availableTokens > 0,
-      available: availableTokens,
-      used: user.tokens?.used || 0,
-      purchased: user.tokens?.purchased || 0
+      hasTokens: tokenDoc.balance > 0,
+      available: tokenDoc.balance,
+      used: tokenDoc.totalUsed,
+      purchased: tokenDoc.totalPurchased
     };
 
     next();

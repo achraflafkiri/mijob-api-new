@@ -256,6 +256,9 @@ const createConversation = async (req, res) => {
 
     console.log('Conversation found/created:', conversation._id);
 
+    // ✨ CRITICAL: Attach conversation to request for middleware
+    req.conversation = conversation;
+
     // Check if this is a NEW conversation (just created)
     const isNewConversation = conversation.createdAt && 
       (new Date() - new Date(conversation.createdAt)) < 5000; // Created in last 5 seconds
@@ -312,7 +315,8 @@ const createConversation = async (req, res) => {
         deducted: true,
         previousBalance: req.tokenDeducted.previousBalance,
         newBalance: req.tokenDeducted.newBalance,
-        message: `1 jeton déduit - ${req.tokenDeducted.newBalance} jeton(s) restant(s)`
+        message: `1 jeton déduit - ${req.tokenDeducted.newBalance} jeton(s) restant(s)`,
+        transactionId: req.tokenDeducted.transactionId
       };
       console.log(`🪙 Token deducted for conversation: ${conversation._id}`);
     }

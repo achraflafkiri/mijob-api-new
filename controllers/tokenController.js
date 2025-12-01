@@ -1,7 +1,9 @@
 // controllers/tokenController.js
 // Controller for managing token purchases for particulier users
+// WITH Token model for transaction history
 
 const User = require('../models/User');
+const Token = require('../models/Token');
 
 /**
  * Get current token balance
@@ -18,17 +20,22 @@ exports.getTokenBalance = async (req, res) => {
     }
 
     const userId = req.user._id || req.user.id;
+    
+    // Get or create token document
+    const tokenDoc = await Token.findOrCreate(userId);
+    
+    // Also sync with User model for consistency
     const user = await User.findById(userId).select('tokens');
 
     res.status(200).json({
       success: true,
       data: {
-        tokens: {
-          available: user.tokens?.available || 0,
-          used: user.tokens?.used || 0,
-          purchased: user.tokens?.purchased || 0,
-          total: (user.tokens?.available || 0) + (user.tokens?.used || 0)
-        }
+        available: tokenDoc.balance,
+        used: tokenDoc.totalUsed,
+        purchased: tokenDoc.totalPurchased,
+        total: tokenDoc.totalPurchased,
+        lastPurchase: tokenDoc.lastPurchaseDate,
+        lastUsage: tokenDoc.lastUsageDate
       }
     });
 
@@ -43,7 +50,7 @@ exports.getTokenBalance = async (req, res) => {
 };
 
 /**
- * Process fake token purchase
+ * Process fake token purchase WITH transaction history
  * @route   POST /api/v1/tokens/purchase
  * @access  Private (Particulier only)
  */
@@ -61,10 +68,10 @@ exports.purchaseTokens = async (req, res) => {
 
     // Token packages
     const tokenPackages = {
-      1: { tokens: 10, price: 100, name: 'Pack 10 Jetons' },
-      2: { tokens: 25, price: 200, name: 'Pack 25 Jetons' },
-      3: { tokens: 50, price: 350, name: 'Pack 50 Jetons' },
-      4: { tokens: 100, price: 600, name: 'Pack 100 Jetons' },
+      1: { tokens: 10, price: 100, name: 'Pack Découverte' },
+      2: { tokens: 25, price: 200, name: 'Pack Standard' },
+      3: { tokens: 50, price: 350, name: 'Pack Premium' },
+      4: { tokens: 100, price: 600, name: 'Pack VIP' },
       custom: { tokens: quantity || 1, price: (quantity || 1) * 15, name: 'Pack Personnalisé' }
     };
 
@@ -89,8 +96,12 @@ exports.purchaseTokens = async (req, res) => {
     }
 
     const userId = req.user._id || req.user.id;
+    
+    // Get or create token document
+    const tokenDoc = await Token.findOrCreate(userId);
+    
+    // Also get user for sync
     const user = await User.findById(userId);
-
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -98,7 +109,26 @@ exports.purchaseTokens = async (req, res) => {
       });
     }
 
-    // Initialize tokens object if not exists
+    const tokensToAdd = selectedPackage.tokens;
+    const previousBalance = tokenDoc.balance;
+
+    // Add transaction to Token model
+    tokenDoc.addTransaction({
+      type: 'purchase',
+      amount: tokensToAdd,
+      reason: 'Achat de jetons',
+      packageName: selectedPackage.name,
+      price: selectedPackage.price,
+      metadata: {
+        packageId,
+        paymentMethod: 'fake', // For testing
+        currency: 'DH'
+      }
+    });
+
+    await tokenDoc.save();
+
+    // Sync with User model (for backward compatibility)
     if (!user.tokens) {
       user.tokens = {
         available: 0,
@@ -106,22 +136,22 @@ exports.purchaseTokens = async (req, res) => {
         purchased: 0
       };
     }
-
-    // Add tokens
-    const tokensToAdd = selectedPackage.tokens;
-    user.tokens.available = (user.tokens.available || 0) + tokensToAdd;
-    user.tokens.purchased = (user.tokens.purchased || 0) + tokensToAdd;
-
+    user.tokens.available = tokenDoc.balance;
+    user.tokens.purchased = tokenDoc.totalPurchased;
+    user.tokens.used = tokenDoc.totalUsed;
+    
     await user.save();
 
-    // Log the fake purchase
-    console.log('✅ Fake token purchase processed:', {
+    // Log the purchase
+    console.log('✅ Token purchase processed with transaction history:', {
       userId: user._id,
       email: user.email,
       package: selectedPackage.name,
       tokensAdded: tokensToAdd,
       price: selectedPackage.price,
-      newBalance: user.tokens.available
+      previousBalance,
+      newBalance: tokenDoc.balance,
+      transactionId: tokenDoc.transactions[tokenDoc.transactions.length - 1]._id
     });
 
     res.status(200).json({
@@ -132,12 +162,14 @@ exports.purchaseTokens = async (req, res) => {
           package: selectedPackage.name,
           tokensAdded: tokensToAdd,
           price: selectedPackage.price,
-          currency: 'DH'
+          currency: 'DH',
+          transactionId: tokenDoc.transactions[tokenDoc.transactions.length - 1]._id
         },
         tokens: {
-          available: user.tokens.available,
-          used: user.tokens.used,
-          purchased: user.tokens.purchased
+          available: tokenDoc.balance,
+          used: tokenDoc.totalUsed,
+          purchased: tokenDoc.totalPurchased,
+          previousBalance
         }
       }
     });
@@ -153,13 +185,13 @@ exports.purchaseTokens = async (req, res) => {
 };
 
 /**
- * Use a token (deduct from available)
+ * Use a token (deduct from available) WITH transaction history
  * @route   POST /api/v1/tokens/use
  * @access  Private (Particulier only)
  */
 exports.useToken = async (req, res) => {
   try {
-    const { missionId, reason } = req.body;
+    const { missionId, conversationId, reason } = req.body;
 
     if (req.user.userType !== 'particulier') {
       return res.status(403).json({
@@ -169,40 +201,55 @@ exports.useToken = async (req, res) => {
     }
 
     const userId = req.user._id || req.user.id;
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'Utilisateur non trouvé'
-      });
-    }
+    
+    // Get or create token document
+    const tokenDoc = await Token.findOrCreate(userId);
 
     // Check if user has tokens
-    const availableTokens = user.tokens?.available || 0;
-    if (availableTokens < 1) {
+    if (tokenDoc.balance < 1) {
       return res.status(400).json({
         success: false,
         message: 'Vous n\'avez pas assez de jetons',
         details: {
-          available: availableTokens,
+          available: tokenDoc.balance,
           required: 1,
           suggestion: 'Achetez plus de jetons pour continuer'
         }
       });
     }
 
-    // Deduct token
-    user.tokens.available -= 1;
-    user.tokens.used = (user.tokens.used || 0) + 1;
+    const previousBalance = tokenDoc.balance;
 
-    await user.save();
+    // Add transaction
+    tokenDoc.addTransaction({
+      type: 'used',
+      amount: 1,
+      reason: reason || 'Utilisation de jeton',
+      relatedMissionId: missionId,
+      relatedConversationId: conversationId,
+      metadata: {
+        action: missionId ? 'mission_creation' : conversationId ? 'conversation_creation' : 'other'
+      }
+    });
 
-    console.log('✅ Token used:', {
-      userId: user._id,
+    await tokenDoc.save();
+
+    // Sync with User model
+    const user = await User.findById(userId);
+    if (user && user.tokens) {
+      user.tokens.available = tokenDoc.balance;
+      user.tokens.used = tokenDoc.totalUsed;
+      await user.save();
+    }
+
+    console.log('✅ Token used with transaction history:', {
+      userId,
       missionId,
+      conversationId,
       reason,
-      remainingTokens: user.tokens.available
+      previousBalance,
+      newBalance: tokenDoc.balance,
+      transactionId: tokenDoc.transactions[tokenDoc.transactions.length - 1]._id
     });
 
     res.status(200).json({
@@ -210,9 +257,11 @@ exports.useToken = async (req, res) => {
       message: 'Jeton utilisé avec succès',
       data: {
         tokens: {
-          available: user.tokens.available,
-          used: user.tokens.used
-        }
+          available: tokenDoc.balance,
+          used: tokenDoc.totalUsed,
+          previousBalance
+        },
+        transactionId: tokenDoc.transactions[tokenDoc.transactions.length - 1]._id
       }
     });
 
@@ -251,7 +300,12 @@ exports.getTokenPackages = async (req, res) => {
         popular: false,
         icon: '🎯',
         description: 'Parfait pour commencer',
-        gradient: 'from-blue-500 to-cyan-500'
+        gradient: 'from-blue-500 to-cyan-500',
+        features: [
+          '10 jetons',
+          'Valable 1 an',
+          'Support standard'
+        ]
       },
       {
         id: 2,
@@ -263,7 +317,13 @@ exports.getTokenPackages = async (req, res) => {
         popular: true,
         icon: '⭐',
         description: 'Le plus populaire',
-        gradient: 'from-purple-500 to-pink-500'
+        gradient: 'from-purple-500 to-pink-500',
+        features: [
+          '25 jetons',
+          'Économisez 50 DH',
+          'Valable 1 an',
+          'Support prioritaire'
+        ]
       },
       {
         id: 3,
@@ -275,7 +335,14 @@ exports.getTokenPackages = async (req, res) => {
         popular: false,
         icon: '💎',
         description: 'Meilleure valeur',
-        gradient: 'from-amber-500 to-orange-500'
+        gradient: 'from-amber-500 to-orange-500',
+        features: [
+          '50 jetons',
+          'Économisez 150 DH',
+          'Valable 1 an',
+          'Support prioritaire',
+          'Bonus exclusifs'
+        ]
       },
       {
         id: 4,
@@ -287,7 +354,15 @@ exports.getTokenPackages = async (req, res) => {
         popular: false,
         icon: '👑',
         description: 'Économie maximale',
-        gradient: 'from-green-500 to-emerald-500'
+        gradient: 'from-green-500 to-emerald-500',
+        features: [
+          '100 jetons',
+          'Économisez 400 DH',
+          'Valable 1 an',
+          'Support VIP 24/7',
+          'Bonus exclusifs',
+          'Accès anticipé'
+        ]
       }
     ];
 
@@ -313,7 +388,7 @@ exports.getTokenPackages = async (req, res) => {
 };
 
 /**
- * Get token usage history
+ * Get token usage history WITH full transaction details
  * @route   GET /api/v1/tokens/history
  * @access  Private (Particulier only)
  */
@@ -327,24 +402,59 @@ exports.getTokenHistory = async (req, res) => {
     }
 
     const userId = req.user._id || req.user.id;
-    const user = await User.findById(userId).select('tokens');
+    const { page = 1, limit = 20, type } = req.query;
 
-    // For now, return basic stats
-    // In production, you'd have a TokenTransaction model
-    const history = {
-      summary: {
-        totalPurchased: user.tokens?.purchased || 0,
-        totalUsed: user.tokens?.used || 0,
-        currentBalance: user.tokens?.available || 0
-      },
-      recentTransactions: [
-        // This would come from a TokenTransaction model in production
-      ]
-    };
+    // Get or create token document
+    const tokenDoc = await Token.findOrCreate(userId);
+
+    // Filter transactions by type if specified
+    let transactions = tokenDoc.transactions;
+    if (type && ['purchase', 'used', 'refund', 'expired'].includes(type)) {
+      transactions = transactions.filter(t => t.type === type);
+    }
+
+    // Sort by date (newest first)
+    transactions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    // Pagination
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+    const paginatedTransactions = transactions.slice(startIndex, endIndex);
+
+    // Format transactions for response
+    const formattedTransactions = paginatedTransactions.map(t => ({
+      id: t._id,
+      type: t.type,
+      amount: t.amount,
+      balanceBefore: t.balanceBefore,
+      balanceAfter: t.balanceAfter,
+      reason: t.reason,
+      packageName: t.packageName,
+      price: t.price,
+      relatedMissionId: t.relatedMissionId,
+      relatedConversationId: t.relatedConversationId,
+      metadata: t.metadata,
+      createdAt: t.createdAt
+    }));
 
     res.status(200).json({
       success: true,
-      data: history
+      data: {
+        summary: {
+          currentBalance: tokenDoc.balance,
+          totalPurchased: tokenDoc.totalPurchased,
+          totalUsed: tokenDoc.totalUsed,
+          lastPurchase: tokenDoc.lastPurchaseDate,
+          lastUsage: tokenDoc.lastUsageDate
+        },
+        transactions: formattedTransactions,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: transactions.length,
+          pages: Math.ceil(transactions.length / limit)
+        }
+      }
     });
 
   } catch (error) {
@@ -352,6 +462,66 @@ exports.getTokenHistory = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération de l\'historique',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+/**
+ * Get token statistics
+ * @route   GET /api/v1/tokens/stats
+ * @access  Private (Particulier only)
+ */
+exports.getTokenStats = async (req, res) => {
+  try {
+    if (req.user.userType !== 'particulier') {
+      return res.status(403).json({
+        success: false,
+        message: 'Les jetons sont réservés aux particuliers uniquement'
+      });
+    }
+
+    const userId = req.user._id || req.user.id;
+    const tokenDoc = await Token.findOrCreate(userId);
+
+    // Calculate statistics
+    const purchaseTransactions = tokenDoc.transactions.filter(t => t.type === 'purchase');
+    const usageTransactions = tokenDoc.transactions.filter(t => t.type === 'used');
+
+    const totalSpent = purchaseTransactions.reduce((sum, t) => sum + (t.price || 0), 0);
+    const averagePurchase = purchaseTransactions.length > 0 
+      ? totalSpent / purchaseTransactions.length 
+      : 0;
+
+    // Usage breakdown
+    const missionUsage = usageTransactions.filter(t => t.relatedMissionId).length;
+    const conversationUsage = usageTransactions.filter(t => t.relatedConversationId).length;
+    const otherUsage = usageTransactions.length - missionUsage - conversationUsage;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        balance: tokenDoc.balance,
+        totalPurchased: tokenDoc.totalPurchased,
+        totalUsed: tokenDoc.totalUsed,
+        totalSpent,
+        averagePurchase,
+        purchaseCount: purchaseTransactions.length,
+        usageBreakdown: {
+          missions: missionUsage,
+          conversations: conversationUsage,
+          other: otherUsage
+        },
+        lastPurchase: tokenDoc.lastPurchaseDate,
+        lastUsage: tokenDoc.lastUsageDate
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get token stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Erreur lors de la récupération des statistiques',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

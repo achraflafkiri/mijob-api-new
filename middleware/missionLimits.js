@@ -1,9 +1,10 @@
-// middleware/missionLimits.js - FINAL VERSION WITH TOKEN DEDUCTION
+// middleware/missionLimits.js - WITH TOKEN MODEL INTEGRATION
 // Middleware to check mission creation limits for entreprise users
-// AND token deduction for particulier users
+// AND token deduction for particulier users WITH TRANSACTION HISTORY
 
 const Mission = require('../models/Mission');
 const User = require('../models/User');
+const Token = require('../models/Token');
 
 /**
  * Check if entreprise user has reached their monthly mission limit
@@ -50,7 +51,7 @@ exports.checkEntrepriseMissionLimit = async (req, res, next) => {
       }
     });
 
-    // Define pack limits (no 'none' option here since we already blocked it)
+    // Define pack limits
     const packLimits = {
       basic: 3,     // Basic = 3 missions per month
       standard: 5,  // Standard = 5 missions per month  
@@ -122,20 +123,13 @@ exports.checkParticulierTokens = async (req, res, next) => {
     const featuredCost = featuredListing ? 5 : 0;  // Mise en avant: +5 jetons
     const totalTokenCost = baseTokenCost + featuredCost;
 
-    // Get fresh user data to ensure token balance is accurate
-    const user = await User.findById(req.user._id).select('tokens userType');
+    const userId = req.user._id || req.user.id;
     
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'Utilisateur non trouvé'
-      });
-    }
+    // ✨ Use Token model instead of User.tokens
+    const tokenDoc = await Token.findOrCreate(userId);
+    const availableTokens = tokenDoc.balance;
 
-    // Check token balance
-    const availableTokens = user.tokens?.available || 0;
-
-    console.log(`🪙 Token check for mission - User: ${req.user._id}, Available: ${availableTokens}, Required: ${totalTokenCost}`);
+    console.log(`🪙 Token check for mission - User: ${userId}, Available: ${availableTokens}, Required: ${totalTokenCost}`);
 
     if (availableTokens < totalTokenCost) {
       return res.status(400).json({
@@ -178,7 +172,7 @@ exports.checkParticulierTokens = async (req, res, next) => {
 };
 
 /**
- * DEDUCT TOKENS after successful mission creation
+ * DEDUCT TOKENS after successful mission creation WITH TRANSACTION HISTORY
  * This middleware should be called AFTER createMission controller
  * Only for particulier users
  */
@@ -196,43 +190,57 @@ exports.deductMissionTokens = async (req, res, next) => {
     }
 
     const tokenCost = req.tokenCost.total;
-    const userId = req.user._id;
+    const userId = req.user._id || req.user.id;
 
-    // Get fresh user data
+    // ✨ Use Token model for transaction history
+    const tokenDoc = await Token.findOrCreate(userId);
+    const previousBalance = tokenDoc.balance;
+
+    // Add transaction with mission reference
+    tokenDoc.addTransaction({
+      type: 'used',
+      amount: tokenCost,
+      reason: 'Création de mission',
+      relatedMissionId: req.mission?._id, // If available from controller
+      packageName: req.tokenCost.featured > 0 ? 'Mission avec featured' : 'Mission standard',
+      metadata: {
+        action: 'mission_creation',
+        featured: req.tokenCost.featured > 0,
+        breakdown: {
+          basePublication: req.tokenCost.base,
+          featuredListing: req.tokenCost.featured
+        }
+      }
+    });
+
+    await tokenDoc.save();
+
+    // Sync with User model for backward compatibility
     const user = await User.findById(userId);
-    
-    if (!user) {
-      console.error('❌ User not found for token deduction');
-      return next(); // Continue anyway, mission was already created
+    if (user && user.tokens) {
+      user.tokens.available = tokenDoc.balance;
+      user.tokens.used = tokenDoc.totalUsed;
+      await user.save();
     }
-
-    const previousAvailable = user.tokens?.available || 0;
-
-    // Deduct tokens
-    user.tokens.available = Math.max(0, (user.tokens.available || 0) - tokenCost);
-    user.tokens.used = (user.tokens.used || 0) + tokenCost;
-
-    await user.save();
-
-    const newAvailable = user.tokens.available;
 
     console.log(`✅ Mission tokens deducted - User: ${userId}`);
     console.log(`   Cost: ${tokenCost} jetons`);
-    console.log(`   Before: ${previousAvailable} jetons`);
-    console.log(`   After: ${newAvailable} jetons`);
-    console.log(`   Total used: ${user.tokens.used} jetons`);
+    console.log(`   Before: ${previousBalance} jetons`);
+    console.log(`   After: ${tokenDoc.balance} jetons`);
+    console.log(`   Total used: ${tokenDoc.totalUsed} jetons`);
 
     // Attach token deduction info to response
     req.tokenDeducted = {
       success: true,
       cost: tokenCost,
-      previousBalance: previousAvailable,
-      newBalance: newAvailable,
-      totalUsed: user.tokens.used,
+      previousBalance: previousBalance,
+      newBalance: tokenDoc.balance,
+      totalUsed: tokenDoc.totalUsed,
       breakdown: {
         basePublication: req.tokenCost.base,
         featuredListing: req.tokenCost.featured
-      }
+      },
+      transactionId: tokenDoc.transactions[tokenDoc.transactions.length - 1]._id
     };
 
     next();

@@ -806,7 +806,46 @@ const userSchema = new mongoose.Schema({
         default: false
       }
     }
-  }
+  },
+
+  // ============================================================
+  // ONLINE STATUS & CONNECTION
+  // ============================================================
+
+  lastSeen: {
+    type: Date,
+    default: Date.now
+  },
+
+  isOnline: {
+    type: Boolean,
+    default: false
+  },
+
+  socketId: {
+    type: String,
+    default: null
+  },
+
+  deviceInfo: {
+    type: String,
+    default: null
+  },
+
+  // ============================================================
+  // PRIVACY SETTINGS
+  // ============================================================
+
+  privacy: {
+    showOnlineStatus: {
+      type: Boolean,
+      default: true
+    },
+    showLastSeen: {
+      type: Boolean,
+      default: true
+    }
+  },
 
 }, {
   timestamps: true,
@@ -862,21 +901,21 @@ userSchema.virtual('age').get(function () {
   const birthDate = new Date(this.dateOfBirth);
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-  
+
   if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
     age--;
   }
-  
+
   return age;
 });
 
 // Virtual for upcoming availability
 userSchema.virtual('upcomingAvailability').get(function () {
   if (this.userType !== 'partimer') return [];
-  
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
+
   return this.availabilitySlots
     .filter(slot => slot.date >= today)
     .sort((a, b) => a.date - b.date)
@@ -896,10 +935,10 @@ userSchema.pre('save', async function (next) {
 
 // Update lastAvailabilityUpdate when availability changes
 userSchema.pre('save', function (next) {
-  if (this.isModified('availabilitySlots') || 
-      this.isModified('vacationPeriods') || 
-      this.isModified('dateExceptions') ||
-      this.isModified('weeklySchedule')) {
+  if (this.isModified('availabilitySlots') ||
+    this.isModified('vacationPeriods') ||
+    this.isModified('dateExceptions') ||
+    this.isModified('weeklySchedule')) {
     this.lastAvailabilityUpdate = new Date();
   }
   next();
@@ -1076,13 +1115,13 @@ userSchema.methods.updateWeeklySchedule = async function (day, schedule) {
 // Check if user is available on specific date and time
 userSchema.methods.isAvailable = function (date, startTime, endTime) {
   const availableSlots = this.getAvailableSlotsForDate(new Date(date));
-  
+
   return availableSlots.some(slot => {
     const slotStart = this.timeToMinutes(slot.start);
     const slotEnd = this.timeToMinutes(slot.end);
     const requestedStart = this.timeToMinutes(startTime);
     const requestedEnd = this.timeToMinutes(endTime);
-    
+
     return requestedStart >= slotStart && requestedEnd <= slotEnd;
   });
 };
@@ -1111,7 +1150,7 @@ userSchema.statics.findAvailablePartimers = function (date, startTime, endTime, 
   }
 
   return this.find(query).then(partimers => {
-    return partimers.filter(partimer => 
+    return partimers.filter(partimer =>
       partimer.isAvailable(date, startTime, endTime)
     );
   });
