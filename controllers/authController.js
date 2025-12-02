@@ -378,7 +378,6 @@ const logout = catchAsync(async (req, res, next) => {
 // @access  Private
 const getCurrentUser = catchAsync(async (req, res, next) => {
   const user = await User.findById(req.user._id);
-  console.log("req.user._id: ", req.user._id);
   res.status(200).json({
     success: true,
     status: 'success',

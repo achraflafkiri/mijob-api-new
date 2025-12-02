@@ -1,4 +1,4 @@
-// socket/socketHandler.js - UPDATED VERSION
+// socket/socketHandler.js - FIXED VERSION WITH BETTER ONLINE TRACKING
 
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
@@ -16,7 +16,7 @@ const initializeSocketIO = (io) => {
     try {
       const token = socket.handshake.auth.token;
       
-      console.log('🔐 Socket authentication attempt...');
+      // console.log('🔐 Socket authentication attempt...');
       
       if (!token) {
         console.error('❌ No token provided');
@@ -26,18 +26,22 @@ const initializeSocketIO = (io) => {
       const jwt = require('jsonwebtoken');
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
-      const user = await User.findById(decoded.id).select('-password');
+      // console.log("decoded.id =============> ", decoded)
       
-      if (!user || !user.active) {
-        console.error('❌ User not found or inactive:', decoded.id);
-        return next(new Error('Authentication error: User not found or inactive'));
-      }
+      const user = await User.findById(decoded.id);
+      
+      // console.log("user =============> ", user);
 
+      // if (!user || !user.active) {
+      //   console.error('❌ User not found or inactive:', decoded.id);
+      //   return next(new Error('Authentication error: User not found or inactive'));
+      // }
+      
       socket.userId = user._id.toString();
       socket.userType = user.userType;
       socket.userName = user.fullName || user.nomComplet || user.email;
       
-      console.log('✅ Socket authenticated:', socket.userName, socket.userId);
+      // console.log('✅ Socket authenticated:', socket.userName, socket.userId);
       
       next();
     } catch (error) {
@@ -48,10 +52,10 @@ const initializeSocketIO = (io) => {
 
   io.on('connection', (socket) => {
     const userId = socket.userId;
-    console.log('');
-    console.log('='.repeat(50));
-    console.log(`✅ User connected: ${socket.userName} (${userId})`);
-    console.log(`📍 Socket ID: ${socket.id}`);
+    // console.log('');
+    // console.log('='.repeat(50));
+    // console.log(`✅ User connected: ${socket.userName} (${userId})`);
+    // console.log(`📍 Socket ID: ${socket.id}`);
 
     // ============================================
     // MARK USER AS ONLINE (Multi-device support)
@@ -78,44 +82,37 @@ const initializeSocketIO = (io) => {
       }
     }).catch(err => console.error('❌ Error updating user online status:', err));
 
-    console.log(`👥 Online users count: ${onlineUsers.size}`);
-    console.log(`👥 Online user IDs:`, Array.from(onlineUsers.keys()));
-    console.log(`📱 Active connections for user ${userId}:`, userConnections.get(userId).size);
-    console.log('='.repeat(50));
-    console.log('');
+    // console.log(`👥 Online users count: ${onlineUsers.size}`);
+    // console.log(`👥 Online user IDs:`, Array.from(onlineUsers.keys()));
+    // console.log(`📱 Active connections for user ${userId}:`, userConnections.get(userId).size);
+    // console.log('='.repeat(50));
+    // console.log('');
 
     // Join user's personal room
     socket.join(`user:${userId}`);
 
+    // Broadcast to all that this user is online
+    broadcastUserStatus(io, userId, 'online', socket.userName);
+
     // ============================================
-    // GET ALL ONLINE USERS (for initial load)
+    // GET ALL ONLINE USERS (for initial load) - FIXED
     // ============================================
     socket.on('get:online-users', async (callback) => {
       try {
-        console.log(`👥 User ${userId} requested online users list`);
+        // console.log(`👥 User ${userId} requested online users list`);
+        // console.log(`👥 Current online users in Map:`, Array.from(onlineUsers.keys()));
         
-        // Get online users with privacy settings
+        // Get online users - RETURN ARRAY OF USER IDS
         const onlineUserIds = Array.from(onlineUsers.keys());
         
-        const users = await User.find({
-          _id: { $in: onlineUserIds },
-          'privacy.showOnlineStatus': true
-        }).select('_id firstName lastName nomComplet raisonSociale profilePicture userType');
-        
-        const formattedUsers = users.map(user => ({
-          _id: user._id,
-          name: user.fullName,
-          userType: user.userType,
-          profilePicture: user.profilePicture,
-          isOnline: true
-        }));
-        
-        console.log(`📋 Returning ${formattedUsers.length} online users`);
+        // console.log(`📋 Returning ${onlineUserIds.length} online user IDs:`, onlineUserIds);
         
         if (callback) {
           callback({
             success: true,
-            onlineUsers: formattedUsers
+            onlineUsers: onlineUserIds, // ✅ RETURN ARRAY OF IDs, NOT OBJECTS
+            count: onlineUserIds.length,
+            timestamp: new Date()
           });
         }
       } catch (error) {
@@ -125,7 +122,7 @@ const initializeSocketIO = (io) => {
     });
 
     // ============================================
-    // GET USERS WITH STATUS (Online/Offline)
+    // GET USERS WITH STATUS (Online/Offline) - FIXED
     // ============================================
     socket.on('get:users-with-status', async (data, callback) => {
       try {
@@ -135,15 +132,18 @@ const initializeSocketIO = (io) => {
           return callback?.({ success: false, error: 'Invalid user IDs array' });
         }
 
-        console.log(`👥 Getting status for ${userIds.length} users`);
+        // console.log(`👥 Getting status for ${userIds.length} users`);
         
         const users = await User.find({
           _id: { $in: userIds }
         }).select('_id firstName lastName nomComplet raisonSociale profilePicture userType isOnline lastSeen privacy');
         
         const usersWithStatus = users.map(user => {
-          const isCurrentlyOnline = onlineUsers.has(user._id.toString());
+          const userId = user._id.toString();
+          const isCurrentlyOnline = onlineUsers.has(userId);
           const canShowStatus = user.privacy?.showOnlineStatus !== false;
+          
+          // console.log(`  👤 User ${user.fullName || user.nomComplet}: Online=${isCurrentlyOnline}, CanShow=${canShowStatus}`);
           
           return {
             _id: user._id,
@@ -157,6 +157,8 @@ const initializeSocketIO = (io) => {
           };
         });
 
+        // console.log(`✅ Returning ${usersWithStatus.length} users with status`);
+
         callback?.({
           success: true,
           users: usersWithStatus
@@ -169,11 +171,11 @@ const initializeSocketIO = (io) => {
     });
 
     // ============================================
-    // GET ALL USERS WITH ONLINE STATUS
+    // GET ALL USERS WITH ONLINE STATUS - FIXED
     // ============================================
     socket.on('get:all-users-status', async (callback) => {
       try {
-        console.log(`👥 User ${userId} requested all users with status`);
+        // console.log(`👥 User ${userId} requested all users with status`);
         
         // Get all users (paginate if needed)
         const users = await User.find({
@@ -183,8 +185,12 @@ const initializeSocketIO = (io) => {
           .limit(100) // Limit for performance
           .sort({ createdAt: -1 });
 
+        const onlineUserIds = Array.from(onlineUsers.keys());
+        // console.log(`📊 Currently online users:`, onlineUserIds);
+
         const usersWithStatus = users.map(user => {
-          const isCurrentlyOnline = onlineUsers.has(user._id.toString());
+          const userId = user._id.toString();
+          const isCurrentlyOnline = onlineUsers.has(userId);
           const canShowStatus = user.privacy?.showOnlineStatus !== false;
           
           return {
@@ -199,12 +205,14 @@ const initializeSocketIO = (io) => {
           };
         });
 
-        console.log(`📋 Returning ${usersWithStatus.length} users with status`);
+        // console.log(`📋 Returning ${usersWithStatus.length} users with status`);
+        // console.log(`📊 Online count: ${usersWithStatus.filter(u => u.isOnline).length}`);
         
         callback?.({
           success: true,
           users: usersWithStatus,
-          totalOnline: Array.from(onlineUsers.keys()).filter(id => id !== userId).length
+          totalOnline: onlineUserIds.length,
+          onlineUserIds: onlineUserIds // ✅ ADD THIS FOR DEBUGGING
         });
         
       } catch (error) {
@@ -227,7 +235,7 @@ const initializeSocketIO = (io) => {
           }
         });
 
-        console.log(`🔒 User ${userId} updated privacy settings:`, { showOnlineStatus, showLastSeen });
+        // console.log(`🔒 User ${userId} updated privacy settings:`, { showOnlineStatus, showLastSeen });
         
         // Notify conversation participants about status change
         broadcastUserStatus(io, userId, showOnlineStatus ? 'online' : 'hidden');
@@ -255,11 +263,11 @@ const initializeSocketIO = (io) => {
     });
 
     // ============================================
-    // JOIN CONVERSATION WITH ONLINE STATUS
+    // JOIN CONVERSATION WITH ONLINE STATUS - FIXED
     // ============================================
     socket.on('conversation:join', async (conversationId, callback) => {
       try {
-        console.log(`📥 User ${userId} (${socket.userName}) joining conversation: ${conversationId}`);
+        // console.log(`📥 User ${userId} (${socket.userName}) joining conversation: ${conversationId}`);
 
         const conversation = await Conversation.findById(conversationId)
           .populate('participants');
@@ -285,14 +293,14 @@ const initializeSocketIO = (io) => {
         }
 
         socket.join(`conversation:${conversationId}`);
-        console.log(`✅ User ${userId} joined room: conversation:${conversationId}`);
+        // console.log(`✅ User ${userId} joined room: conversation:${conversationId}`);
         
         // Auto-mark messages as read
         const markedCount = await Message.markAllAsRead(conversationId, userId);
         await conversation.resetUnread(userId);
 
         if (markedCount > 0) {
-          console.log(`📖 Auto-marked ${markedCount} messages as read`);
+          // console.log(`📖 Auto-marked ${markedCount} messages as read`);
           io.to(`conversation:${conversationId}`).emit('conversation:unread-reset', {
             conversationId,
             userId,
@@ -309,30 +317,31 @@ const initializeSocketIO = (io) => {
           timestamp: new Date()
         });
 
-        // 🆕 Get and send online users in this conversation
-        const onlineParticipants = conversation.participants
+        // 🆕 Get and send online users in this conversation - RETURN IDs
+        const onlineParticipantIds = conversation.participants
           .filter(p => {
-            const isOnline = onlineUsers.has(p._id.toString());
+            const participantId = p._id.toString();
+            const isOnline = onlineUsers.has(participantId);
             const canShow = p.privacy?.showOnlineStatus !== false;
-            return isOnline && canShow && p._id.toString() !== userId;
+            
+            // console.log(`  👤 Participant ${p.fullName || p.nomComplet} (${participantId}): Online=${isOnline}, CanShow=${canShow}`);
+            
+            return isOnline && canShow && participantId !== userId;
           })
-          .map(p => ({
-            _id: p._id,
-            name: p.fullName,
-            userType: p.userType,
-            profilePicture: p.profilePicture
-          }));
+          .map(p => p._id.toString()); // ✅ RETURN IDs, NOT OBJECTS
+
+        // console.log(`👥 Online participants in conversation ${conversationId}:`, onlineParticipantIds);
 
         socket.emit('conversation:online-users', {
           conversationId,
-          onlineUsers: onlineParticipants,
+          onlineUsers: onlineParticipantIds, // ✅ ARRAY OF IDs
           timestamp: new Date()
         });
 
         callback?.({ 
           success: true, 
           markedAsRead: markedCount,
-          onlineUsers: onlineParticipants
+          onlineUsers: onlineParticipantIds // ✅ ARRAY OF IDs
         });
 
       } catch (error) {
@@ -348,7 +357,7 @@ const initializeSocketIO = (io) => {
     // LEAVE CONVERSATION
     // ============================================
     socket.on('conversation:leave', (conversationId) => {
-      console.log(`👋 User ${userId} leaving conversation: ${conversationId}`);
+      // console.log(`👋 User ${userId} leaving conversation: ${conversationId}`);
       socket.leave(`conversation:${conversationId}`);
     });
 
@@ -359,7 +368,7 @@ const initializeSocketIO = (io) => {
       try {
         const { conversationId, content, type = 'text', attachments = [] } = data;
 
-        console.log(`📤 User ${userId} sending message to ${conversationId}`);
+        // console.log(`📤 User ${userId} sending message to ${conversationId}`);
 
         if (!conversationId || !content) {
           return callback?.({ 
@@ -599,11 +608,12 @@ const initializeSocketIO = (io) => {
     });
 
     // ============================================
-    // GET ONLINE USERS FOR CONVERSATION
+    // GET ONLINE USERS FOR CONVERSATION - FIXED
     // ============================================
     socket.on('conversation:get-online-users', async (conversationId, callback) => {
       try {
         console.log(`👥 Getting online users for conversation: ${conversationId}`);
+        console.log(`📊 Current online users in system:`, Array.from(onlineUsers.keys()));
         
         const conversation = await Conversation.findById(conversationId)
           .populate('participants');
@@ -618,17 +628,18 @@ const initializeSocketIO = (io) => {
 
         const onlineParticipants = conversation.participants
           .filter(p => {
-            const isOnline = onlineUsers.has(p._id.toString());
-            console.log(`  - ${p.fullName || p.nomComplet}: ${isOnline ? '🟢 ONLINE' : '⚫ OFFLINE'}`);
+            const participantId = p._id.toString();
+            const isOnline = onlineUsers.has(participantId);
+            console.log(`  - ${p.fullName || p.nomComplet} (${participantId}): ${isOnline ? '🟢 ONLINE' : '⚫ OFFLINE'}`);
             return isOnline;
           })
-          .map(p => p._id.toString());
+          .map(p => p._id.toString()); // ✅ RETURN IDs
 
         console.log(`✅ Online participants in conversation:`, onlineParticipants);
 
         callback?.({ 
           success: true, 
-          onlineUsers: onlineParticipants 
+          onlineUsers: onlineParticipants // ✅ ARRAY OF IDs
         });
 
       } catch (error) {
@@ -728,14 +739,14 @@ const initializeSocketIO = (io) => {
 // ============================================
 const broadcastUserStatus = async (io, userId, status, userName = null) => {
   try {
-    console.log(`📡 Broadcasting ${status} status for user ${userId}`);
+    // console.log(`📡 Broadcasting ${status} status for user ${userId}`);
     
     // Find all conversations this user is in
     const conversations = await Conversation.find({
       'participants': userId
     }).select('_id participants');
 
-    console.log(`📡 Found ${conversations.length} conversations for user ${userId}`);
+    // console.log(`📡 Found ${conversations.length} conversations for user ${userId}`);
 
     for (const conversation of conversations) {
       const roomName = `conversation:${conversation._id}`;
@@ -747,7 +758,7 @@ const broadcastUserStatus = async (io, userId, status, userName = null) => {
         timestamp: new Date()
       });
       
-      console.log(`  ✅ Emitted to conversation: ${roomName}`);
+      // console.log(`  ✅ Emitted to conversation: ${roomName}`);
     }
 
     // Also broadcast to all users who might be viewing users list
@@ -757,7 +768,7 @@ const broadcastUserStatus = async (io, userId, status, userName = null) => {
       timestamp: new Date()
     });
 
-    console.log(`✅ Broadcasted ${status} status for user ${userId}`);
+    // console.log(`✅ Broadcasted ${status} status for user ${userId}`);
   } catch (error) {
     console.error('❌ Error broadcasting user status:', error);
   }
