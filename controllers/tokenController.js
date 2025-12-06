@@ -1,6 +1,8 @@
-// controllers/tokenController.js
-// Controller for managing token purchases for particulier users
-// WITH Token model for transaction history
+// controllers/tokenController.js - FIXED according to Cahier des Charges
+// Token packages for particulier users:
+// 100 DH = 50 jetons
+// 250 DH = 150 jetons  
+// 450 DH = 300 jetons
 
 const User = require('../models/User');
 const Token = require('../models/Token');
@@ -20,10 +22,10 @@ exports.getTokenBalance = async (req, res) => {
     }
 
     const userId = req.user._id || req.user.id;
-    
+
     // Get or create token document
     const tokenDoc = await Token.findOrCreate(userId);
-    
+
     // Also sync with User model for consistency
     const user = await User.findById(userId).select('tokens');
 
@@ -51,12 +53,18 @@ exports.getTokenBalance = async (req, res) => {
 
 /**
  * Process fake token purchase WITH transaction history
+ * UPDATED to match Cahier des Charges pricing
  * @route   POST /api/v1/tokens/purchase
  * @access  Private (Particulier only)
  */
 exports.purchaseTokens = async (req, res) => {
   try {
     const { packageId, quantity } = req.body;
+
+    console.log("packageId, quantity: ", {
+      packageId, 
+      quantity
+    });
 
     // Validate user type
     if (req.user.userType !== 'particulier') {
@@ -66,22 +74,24 @@ exports.purchaseTokens = async (req, res) => {
       });
     }
 
-    // Token packages
+    // Token packages - UPDATED according to Cahier des Charges (Page 11-12)
+    // 100dh : 50 jetons
+    // 250 dh : 150 jetons
+    // 450 dh : 300 jetons
     const tokenPackages = {
-      1: { tokens: 10, price: 100, name: 'Pack Découverte' },
-      2: { tokens: 25, price: 200, name: 'Pack Standard' },
-      3: { tokens: 50, price: 350, name: 'Pack Premium' },
-      4: { tokens: 100, price: 600, name: 'Pack VIP' },
-      custom: { tokens: quantity || 1, price: (quantity || 1) * 15, name: 'Pack Personnalisé' }
+      1: { tokens: 50, price: 100, name: 'Pack Starter' },
+      2: { tokens: 150, price: 250, name: 'Pack Standard' },
+      3: { tokens: 300, price: 450, name: 'Pack Premium' },
+      custom: { tokens: quantity || 1, price: (quantity || 1) * 2, name: 'Pack Personnalisé' } // 2 DH per token
     };
 
     // Validate package
     let selectedPackage;
     if (packageId === 'custom') {
-      if (!quantity || quantity < 1 || quantity > 500) {
+      if (!quantity || quantity < 1 || quantity > 1000) {
         return res.status(400).json({
           success: false,
-          message: 'La quantité doit être entre 1 et 500 jetons'
+          message: 'La quantité doit être entre 1 et 1000 jetons'
         });
       }
       selectedPackage = tokenPackages.custom;
@@ -96,10 +106,10 @@ exports.purchaseTokens = async (req, res) => {
     }
 
     const userId = req.user._id || req.user.id;
-    
+
     // Get or create token document
     const tokenDoc = await Token.findOrCreate(userId);
-    
+
     // Also get user for sync
     const user = await User.findById(userId);
     if (!user) {
@@ -121,7 +131,7 @@ exports.purchaseTokens = async (req, res) => {
       price: selectedPackage.price,
       metadata: {
         packageId,
-        paymentMethod: 'fake', // For testing
+        paymentMethod: 'cmi', // CMI payment gateway
         currency: 'DH'
       }
     });
@@ -136,10 +146,15 @@ exports.purchaseTokens = async (req, res) => {
         purchased: 0
       };
     }
+
+    console.log("tokenDoc.balance: ", tokenDoc.balance);
+    console.log("tokenDoc.totalPurchased: ", tokenDoc.totalPurchased);
+    console.log("tokenDoc.totalUsed: ", tokenDoc.totalUsed);
+
     user.tokens.available = tokenDoc.balance;
     user.tokens.purchased = tokenDoc.totalPurchased;
     user.tokens.used = tokenDoc.totalUsed;
-    
+
     await user.save();
 
     // Log the purchase
@@ -201,7 +216,7 @@ exports.useToken = async (req, res) => {
     }
 
     const userId = req.user._id || req.user.id;
-    
+
     // Get or create token document
     const tokenDoc = await Token.findOrCreate(userId);
 
@@ -277,6 +292,7 @@ exports.useToken = async (req, res) => {
 
 /**
  * Get token packages
+ * UPDATED to match Cahier des Charges pricing
  * @route   GET /api/v1/tokens/packages
  * @access  Private (Particulier only)
  */
@@ -289,20 +305,21 @@ exports.getTokenPackages = async (req, res) => {
       });
     }
 
+    // Packages according to Cahier des Charges (Page 11-12)
     const packages = [
       {
         id: 1,
-        name: 'Pack Découverte',
-        tokens: 10,
+        name: 'Pack Starter',
+        tokens: 50,
         price: 100,
-        pricePerToken: 10,
+        pricePerToken: 2.0,
         savings: 0,
         popular: false,
         icon: '🎯',
-        description: 'Parfait pour commencer',
+        description: 'Parfait pour débuter',
         gradient: 'from-blue-500 to-cyan-500',
         features: [
-          '10 jetons',
+          '50 jetons',
           'Valable 1 an',
           'Support standard'
         ]
@@ -310,16 +327,16 @@ exports.getTokenPackages = async (req, res) => {
       {
         id: 2,
         name: 'Pack Standard',
-        tokens: 25,
-        price: 200,
-        pricePerToken: 8,
+        tokens: 150,
+        price: 250,
+        pricePerToken: 1.67,
         savings: 50,
         popular: true,
         icon: '⭐',
         description: 'Le plus populaire',
         gradient: 'from-purple-500 to-pink-500',
         features: [
-          '25 jetons',
+          '150 jetons',
           'Économisez 50 DH',
           'Valable 1 an',
           'Support prioritaire'
@@ -328,40 +345,20 @@ exports.getTokenPackages = async (req, res) => {
       {
         id: 3,
         name: 'Pack Premium',
-        tokens: 50,
-        price: 350,
-        pricePerToken: 7,
+        tokens: 300,
+        price: 450,
+        pricePerToken: 1.5,
         savings: 150,
         popular: false,
         icon: '💎',
         description: 'Meilleure valeur',
         gradient: 'from-amber-500 to-orange-500',
         features: [
-          '50 jetons',
+          '300 jetons',
           'Économisez 150 DH',
           'Valable 1 an',
           'Support prioritaire',
           'Bonus exclusifs'
-        ]
-      },
-      {
-        id: 4,
-        name: 'Pack VIP',
-        tokens: 100,
-        price: 600,
-        pricePerToken: 6,
-        savings: 400,
-        popular: false,
-        icon: '👑',
-        description: 'Économie maximale',
-        gradient: 'from-green-500 to-emerald-500',
-        features: [
-          '100 jetons',
-          'Économisez 400 DH',
-          'Valable 1 an',
-          'Support VIP 24/7',
-          'Bonus exclusifs',
-          'Accès anticipé'
         ]
       }
     ];
@@ -371,9 +368,9 @@ exports.getTokenPackages = async (req, res) => {
       data: {
         packages,
         customAvailable: true,
-        customPrice: 15, // DH per token
+        customPrice: 2, // DH per token
         minCustom: 1,
-        maxCustom: 500
+        maxCustom: 1000
       }
     });
 
@@ -489,8 +486,8 @@ exports.getTokenStats = async (req, res) => {
     const usageTransactions = tokenDoc.transactions.filter(t => t.type === 'used');
 
     const totalSpent = purchaseTransactions.reduce((sum, t) => sum + (t.price || 0), 0);
-    const averagePurchase = purchaseTransactions.length > 0 
-      ? totalSpent / purchaseTransactions.length 
+    const averagePurchase = purchaseTransactions.length > 0
+      ? totalSpent / purchaseTransactions.length
       : 0;
 
     // Usage breakdown

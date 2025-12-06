@@ -80,7 +80,7 @@ exports.authorize = (...userTypes) => {
       });
     }
 
-    console.log("req.user: ", req.user);    
+    // console.log("req.user: ", req.user);    
 
     // Check if user's userType is in the allowed list
     if (!userTypes.includes(req.user.userType)) {
