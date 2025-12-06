@@ -1,4 +1,4 @@
-// controllers/conversationController.js - UPDATED WITH TOKEN DEDUCTION
+// controllers/conversationController.js - FIXED: Prevent duplicate conversations
 
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
@@ -221,7 +221,7 @@ const getConversation = async (req, res) => {
 };
 
 // ============================================
-// CREATE CONVERSATION - UPDATED WITH TOKEN DEDUCTION
+// CREATE CONVERSATION - FIXED: No duplicates + Token deduction
 // ============================================
 const createConversation = async (req, res) => {
   try {
@@ -247,7 +247,7 @@ const createConversation = async (req, res) => {
       });
     }
 
-    // Check if conversation already exists
+    // ✅ CRITICAL FIX: Check if conversation already exists BEFORE creating
     let conversation = await Conversation.findOrCreate(
       userId,
       otherUserId,
@@ -256,12 +256,18 @@ const createConversation = async (req, res) => {
 
     console.log('Conversation found/created:', conversation._id);
 
-    // ✨ CRITICAL: Attach conversation to request for middleware
-    req.conversation = conversation;
-
-    // Check if this is a NEW conversation (just created)
-    const isNewConversation = conversation.createdAt && 
+    // ✅ Check if this is truly a NEW conversation
+    const wasJustCreated = conversation.createdAt && 
       (new Date() - new Date(conversation.createdAt)) < 5000; // Created in last 5 seconds
+
+    // ✅ If conversation already existed, DON'T attach to middleware (no token deduction)
+    if (wasJustCreated) {
+      console.log('🆕 New conversation created - will deduct token/contact');
+      req.conversation = conversation; // Attach for middleware
+    } else {
+      console.log('♻️ Existing conversation found - NO token/contact deduction');
+      req.conversation = null; // Don't attach, prevent middleware from running
+    }
 
     // Manually populate if needed
     await conversation.populate('participants');
@@ -305,12 +311,13 @@ const createConversation = async (req, res) => {
         relatedMission: conversation.relatedMission || null,
         type: conversation.type,
         createdAt: conversation.createdAt,
-        isNewConversation: isNewConversation
+        isNewConversation: wasJustCreated,
+        alreadyExisted: !wasJustCreated
       }
     };
 
-    // Add token deduction info if particulier user and token was deducted
-    if (userType === 'particulier' && req.tokenDeducted) {
+    // ✅ Only add token info if it was actually deducted (new conversation)
+    if (wasJustCreated && userType === 'particulier' && req.tokenDeducted) {
       responseData.tokenInfo = {
         deducted: true,
         previousBalance: req.tokenDeducted.previousBalance,
@@ -318,23 +325,34 @@ const createConversation = async (req, res) => {
         message: `1 jeton déduit - ${req.tokenDeducted.newBalance} jeton(s) restant(s)`,
         transactionId: req.tokenDeducted.transactionId
       };
-      console.log(`🪙 Token deducted for conversation: ${conversation._id}`);
+      console.log(`🪙 Token deducted for NEW conversation: ${conversation._id}`);
+    } else if (!wasJustCreated && userType === 'particulier') {
+      responseData.tokenInfo = {
+        deducted: false,
+        message: 'Conversation existante - aucun jeton déduit'
+      };
+      console.log(`♻️ NO token deducted - conversation already existed: ${conversation._id}`);
     }
 
-    // Add contact usage info if entreprise user
-    if (userType === 'entreprise' && req.contactUsage) {
+    // ✅ Only add contact usage if it was actually counted (new conversation)
+    if (wasJustCreated && userType === 'entreprise' && req.contactUsage) {
       responseData.contactUsage = {
-        used: req.contactUsage.used + 1, // Add 1 for this conversation
+        used: req.contactUsage.used + 1,
         limit: req.contactUsage.limit,
         remaining: req.contactUsage.remaining - 1,
         plan: req.contactUsage.plan
       };
       console.log(`📊 Contact used: ${req.contactUsage.used + 1}/${req.contactUsage.limit}`);
+    } else if (!wasJustCreated && userType === 'entreprise') {
+      responseData.contactUsage = {
+        message: 'Conversation existante - aucun contact consommé'
+      };
+      console.log(`♻️ NO contact used - conversation already existed: ${conversation._id}`);
     }
 
     res.status(200).json({
       success: true,
-      message: isNewConversation 
+      message: wasJustCreated 
         ? 'Conversation créée avec succès' 
         : 'Conversation existante récupérée',
       data: responseData
