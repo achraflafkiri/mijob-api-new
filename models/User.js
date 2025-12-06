@@ -713,7 +713,7 @@ const userSchema = new mongoose.Schema({
     available: {
       type: Number,
       default: function () {
-        return this.userType !== 'partimer' ? 10 : 0;
+        return this.userType !== 'partimer' ? 0 : 0;
       }
     },
     used: {

@@ -326,9 +326,6 @@ const resendVerification = catchAsync(async (req, res, next) => {
 const login = catchAsync(async (req, res, next) => {
   const { email, password } = req.body;
 
-  
-  
-
   // Validation
   if (!email || !password) {
     return next(new AppError(400, 'Veuillez fournir email et mot de passe'));
