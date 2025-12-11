@@ -223,7 +223,7 @@ const userSchema = new mongoose.Schema({
 
   nationalite: {
     type: String,
-    enum: ['Marocaine', 'Étrangère', 'Double nationalité', 'Autre', null],
+    // enum: ['Marocaine', 'Étrangère', 'Double nationalité', 'Autre', null],
     default: null
   },
 
