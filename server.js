@@ -77,6 +77,7 @@ app.use('/api/v1/messages', require('./routes/messages'));
 app.use('/api/v1/conversations', require('./routes/conversations'));
 app.use('/api/v1/subscriptions', require('./routes/subscriptions'));
 app.use('/api/v1/tokens', require('./routes/tokens'));
+app.use('/api/v1/support', require('./routes/support'));
 
 // ============================================
 // DEBUGGING ENDPOINTS
