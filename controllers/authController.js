@@ -267,6 +267,8 @@ const verifyEmail = catchAsync(async (req, res, next) => {
 const resendVerification = catchAsync(async (req, res, next) => {
   const { email } = req.body;
 
+  console.log('📧 Resend verification request for:', email);
+
   if (!email) {
     return next(new AppError(400, 'Veuillez fournir votre adresse email'));
   }
@@ -274,10 +276,12 @@ const resendVerification = catchAsync(async (req, res, next) => {
   const user = await User.findOne({ email: email.toLowerCase() });
 
   if (!user) {
+    console.error('❌ User not found:', email);
     return next(new AppError(404, 'Aucun utilisateur trouvé avec cet email'));
   }
 
   if (user.emailVerified) {
+    console.log('⚠️ Email already verified:', email);
     return next(new AppError(400, 'Cet email est déjà vérifié'));
   }
 
@@ -285,10 +289,20 @@ const resendVerification = catchAsync(async (req, res, next) => {
   const verificationCode = generateVerificationCode();
   user.emailVerificationCode = verificationCode;
   user.emailVerificationExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
-  await user.save({ validateBeforeSave: false });
+  
+  try {
+    await user.save({ validateBeforeSave: false });
+    console.log('✅ User updated with new verification code');
+  } catch (error) {
+    console.error('❌ Error saving user:', error);
+    return next(new AppError(500, 'Erreur lors de la mise à jour de l\'utilisateur'));
+  }
 
   // Send email
   try {
+    console.log('📤 Attempting to send email to:', user.email);
+    console.log('📤 Verification code:', verificationCode);
+    
     await sendEmail({
       email: user.email,
       subject: 'MIJOB - Nouveau code de vérification',
@@ -307,16 +321,34 @@ const resendVerification = catchAsync(async (req, res, next) => {
       `
     });
 
+    console.log('✅ Email sent successfully');
+
     res.status(200).json({
       success: true,
       status: 'success',
       message: 'Code de vérification envoyé à votre email'
     });
   } catch (error) {
+    console.error('❌ Email sending error:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      response: error.response
+    });
+
+    // Reset verification fields since email failed
     user.emailVerificationCode = undefined;
     user.emailVerificationExpires = undefined;
-    await user.save({ validateBeforeSave: false });
-    return next(new AppError(500, 'Erreur lors de l\'envoi de l\'email. Veuillez réessayer.'));
+    
+    try {
+      await user.save({ validateBeforeSave: false });
+    } catch (saveError) {
+      console.error('❌ Error resetting verification fields:', saveError);
+    }
+
+    // Return more specific error message
+    const errorMessage = error.message || 'Erreur lors de l\'envoi de l\'email';
+    return next(new AppError(500, `Erreur lors de l\'envoi de l\'email: ${errorMessage}. Veuillez réessayer.`));
   }
 });
 
@@ -333,8 +365,6 @@ const login = catchAsync(async (req, res, next) => {
 
   // Find user and include password field
   const user = await User.findOne({ email: email.toLowerCase() }).select('+password +active');
-
-  console.log("useruseruseruseruseruseruseruseruseruseruseruseruser: ", user.email);
 
   if (!user || !(await user.correctPassword(password, user.password))) {
     return next(new AppError(401, 'Email ou mot de passe incorrect'));
