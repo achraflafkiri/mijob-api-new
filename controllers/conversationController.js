@@ -220,8 +220,16 @@ const getConversation = async (req, res) => {
   }
 };
 
+
+
+
+
+
 // ============================================
-// CREATE CONVERSATION - FIXED: No duplicates + Token deduction
+// CREATE CONVERSATION - Token deduction for particulier
+// ============================================
+// ============================================
+// CREATE CONVERSATION - Token deduction for particulier
 // ============================================
 const createConversation = async (req, res) => {
   try {
@@ -247,41 +255,133 @@ const createConversation = async (req, res) => {
       });
     }
 
-    // ✅ CRITICAL FIX: Check if conversation already exists BEFORE creating
-    let conversation = await Conversation.findOrCreate(
-      userId,
-      otherUserId,
-      missionId
-    );
+    // ✅ STEP 1: Check if conversation ALREADY exists (no token needed)
+    const existingConversation = await Conversation.findOne({
+      participants: { $all: [userId, otherUserId] },
+      ...(missionId && { relatedMission: missionId })
+    })
+      .populate('participants')
+      .populate('relatedMission');
 
-    console.log('Conversation found/created:', conversation._id);
+    if (existingConversation) {
+      console.log(`♻️ Existing conversation found: ${existingConversation._id}`);
+      
+      const formattedOtherUser = existingConversation.participants.find(
+        p => p && p._id && p._id.toString() !== userId
+      );
 
-    // ✅ Check if this is truly a NEW conversation
-    const wasJustCreated = conversation.createdAt && 
-      (new Date() - new Date(conversation.createdAt)) < 5000; // Created in last 5 seconds
-
-    // ✅ If conversation already existed, DON'T attach to middleware (no token deduction)
-    if (wasJustCreated) {
-      console.log('🆕 New conversation created - will deduct token/contact');
-      req.conversation = conversation; // Attach for middleware
-    } else {
-      console.log('♻️ Existing conversation found - NO token/contact deduction');
-      req.conversation = null; // Don't attach, prevent middleware from running
+      return res.status(200).json({
+        success: true,
+        message: 'Conversation existante récupérée',
+        data: {
+          conversation: {
+            id: existingConversation._id,
+            participants: existingConversation.participants,
+            otherUser: {
+              id: formattedOtherUser._id,
+              name: formattedOtherUser.userType === 'partimer'
+                ? `${formattedOtherUser.firstName || ''} ${formattedOtherUser.lastName || ''}`.trim()
+                : formattedOtherUser.nomComplet || formattedOtherUser.raisonSociale || 'Utilisateur',
+              profilePicture: formattedOtherUser.profilePicture || formattedOtherUser.companyLogo || null,
+              userType: formattedOtherUser.userType
+            },
+            relatedMission: existingConversation.relatedMission || null,
+            type: existingConversation.type,
+            createdAt: existingConversation.createdAt,
+            isNewConversation: false,
+            alreadyExisted: true
+          },
+          tokenInfo: userType === 'particulier' ? {
+            deducted: false,
+            message: 'Conversation existante - aucun jeton déduit'
+          } : undefined,
+          contactUsage: userType === 'entreprise' ? {
+            message: 'Conversation existante - aucun contact consommé'
+          } : undefined
+        }
+      });
     }
 
-    // Manually populate if needed
-    await conversation.populate('participants');
-    if (missionId) {
-      await conversation.populate('relatedMission');
+    // ✅ STEP 2: NEW CONVERSATION - Check tokens/contacts BEFORE creating
+    if (userType === 'particulier') {
+      // Check if user has enough tokens BEFORE creating conversation
+      const user = await User.findById(userId);
+      
+      if (!user.tokens || user.tokens.available < 1) {
+        console.log(`❌ Insufficient tokens for user ${userId}: ${user.tokens?.available || 0}`);
+        return res.status(403).json({
+          success: false,
+          message: 'Jetons insuffisants. Veuillez acheter des jetons pour créer une conversation.',
+          tokensAvailable: user.tokens?.available || 0,
+          tokensRequired: 1
+        });
+      }
     }
 
-    // Ensure participants are loaded
-    if (!conversation.participants || !Array.isArray(conversation.participants)) {
-      // Reload with populate
-      conversation = await Conversation.findById(conversation._id)
-        .populate('participants')
-        .populate('relatedMission');
+    // TODO: Add entreprise contact limit check here if needed
+    // if (userType === 'entreprise') {
+    //   const subscription = await Subscription.findOne({ userId, status: 'active' });
+    //   // Check contact limits...
+    // }
+
+    // ✅ STEP 3: CREATE the conversation (only after validation passes)
+    let conversation = await Conversation.create({
+      participants: [userId, otherUserId],
+      relatedMission: missionId || null,
+      type: missionId ? 'mission' : 'direct',
+      createdAt: new Date()
+    });
+
+    console.log('✅ New conversation created:', conversation._id);
+
+    // ✅ STEP 4: Deduct token for particulier
+    let tokenDeductionInfo = null;
+    if (userType === 'particulier') {
+      try {
+        const user = await User.findById(userId);
+        
+        const previousBalance = user.tokens.available;
+        user.tokens.available -= 1;
+        user.tokens.used = (user.tokens.used || 0) + 1;
+        
+        await user.save();
+
+        tokenDeductionInfo = {
+          deducted: true,
+          previousBalance: previousBalance,
+          newBalance: user.tokens.available,
+          transactionId: `CONV-${conversation._id}-${Date.now()}`
+        };
+
+        console.log(`🪙 Token deducted for NEW conversation: ${conversation._id}`);
+        console.log(`   Previous balance: ${previousBalance}, New balance: ${user.tokens.available}`);
+
+        // Optional: Log transaction
+        // await TokenTransaction.create({
+        //   userId: userId,
+        //   type: 'conversation',
+        //   amount: -1,
+        //   conversationId: conversation._id,
+        //   balance: user.tokens.available,
+        //   description: `Création de conversation avec ${otherUser.nomComplet || otherUser.raisonSociale}`
+        // });
+
+      } catch (tokenError) {
+        console.error('Token deduction error:', tokenError);
+        // Delete the conversation if token deduction fails
+        await Conversation.findByIdAndDelete(conversation._id);
+        return res.status(500).json({
+          success: false,
+          message: 'Erreur lors de la déduction du jeton',
+          error: tokenError.message
+        });
+      }
     }
+
+    // Populate the conversation
+    conversation = await Conversation.findById(conversation._id)
+      .populate('participants')
+      .populate('relatedMission');
 
     const formattedOtherUser = conversation.participants.find(
       p => p && p._id && p._id.toString() !== userId
@@ -311,31 +411,24 @@ const createConversation = async (req, res) => {
         relatedMission: conversation.relatedMission || null,
         type: conversation.type,
         createdAt: conversation.createdAt,
-        isNewConversation: wasJustCreated,
-        alreadyExisted: !wasJustCreated
+        isNewConversation: true,
+        alreadyExisted: false
       }
     };
 
-    // ✅ Only add token info if it was actually deducted (new conversation)
-    if (wasJustCreated && userType === 'particulier' && req.tokenDeducted) {
+    // ✅ Add token info for particulier users
+    if (userType === 'particulier' && tokenDeductionInfo) {
       responseData.tokenInfo = {
         deducted: true,
-        previousBalance: req.tokenDeducted.previousBalance,
-        newBalance: req.tokenDeducted.newBalance,
-        message: `1 jeton déduit - ${req.tokenDeducted.newBalance} jeton(s) restant(s)`,
-        transactionId: req.tokenDeducted.transactionId
+        previousBalance: tokenDeductionInfo.previousBalance,
+        newBalance: tokenDeductionInfo.newBalance,
+        message: `1 jeton déduit - ${tokenDeductionInfo.newBalance} jeton(s) restant(s)`,
+        transactionId: tokenDeductionInfo.transactionId
       };
-      console.log(`🪙 Token deducted for NEW conversation: ${conversation._id}`);
-    } else if (!wasJustCreated && userType === 'particulier') {
-      responseData.tokenInfo = {
-        deducted: false,
-        message: 'Conversation existante - aucun jeton déduit'
-      };
-      console.log(`♻️ NO token deducted - conversation already existed: ${conversation._id}`);
     }
 
-    // ✅ Only add contact usage if it was actually counted (new conversation)
-    if (wasJustCreated && userType === 'entreprise' && req.contactUsage) {
+    // ✅ Add contact usage for entreprise (if using middleware)
+    if (userType === 'entreprise' && req.contactUsage) {
       responseData.contactUsage = {
         used: req.contactUsage.used + 1,
         limit: req.contactUsage.limit,
@@ -343,18 +436,11 @@ const createConversation = async (req, res) => {
         plan: req.contactUsage.plan
       };
       console.log(`📊 Contact used: ${req.contactUsage.used + 1}/${req.contactUsage.limit}`);
-    } else if (!wasJustCreated && userType === 'entreprise') {
-      responseData.contactUsage = {
-        message: 'Conversation existante - aucun contact consommé'
-      };
-      console.log(`♻️ NO contact used - conversation already existed: ${conversation._id}`);
     }
 
     res.status(200).json({
       success: true,
-      message: wasJustCreated 
-        ? 'Conversation créée avec succès' 
-        : 'Conversation existante récupérée',
+      message: 'Conversation créée avec succès',
       data: responseData
     });
 
@@ -367,6 +453,13 @@ const createConversation = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
 
 // ============================================
 // ARCHIVE CONVERSATION

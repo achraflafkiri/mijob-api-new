@@ -689,6 +689,8 @@ const searchPartimers = async (req, res) => {
     const formattedPartimers = partimers.map(partimer => ({
       id: partimer._id,
       nomComplet: partimer.firstName + ' ' + partimer.lastName,
+      firstName: partimer.firstName,
+      lastName: partimer.lastName,
       city: partimer.city,
       profilePicture: partimer.profilePicture,
       serviceCategories: partimer.serviceCategories,

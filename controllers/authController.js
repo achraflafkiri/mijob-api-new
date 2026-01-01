@@ -1,11 +1,10 @@
-// controllers/authController.js - UPDATED TO MATCH FRONTEND
-
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const { sendEmail, sendWelcomeEmail } = require('../utils/email');
+const { extractPublicId } = require('../config/cloudinary'); // Add this
 
 // Generate JWT Token
 const signToken = (id) => {
@@ -21,7 +20,7 @@ const generateVerificationCode = () => {
 
 // Send token response
 const createSendToken = (user, statusCode, res, message = 'Success') => {
-  const token = signToken(user._id, );
+  const token = signToken(user._id);
 
   // Remove sensitive fields from output
   user.password = undefined;
@@ -32,7 +31,7 @@ const createSendToken = (user, statusCode, res, message = 'Success') => {
 
   res.status(statusCode).json({
     success: true,
-    status: 'success', // Add status for frontend compatibility
+    status: 'success',
     message,
     token,
     data: {
@@ -41,10 +40,48 @@ const createSendToken = (user, statusCode, res, message = 'Success') => {
   });
 };
 
-// @desc    Register new user (UPDATED FOR FRONTEND)
+// Helper function to handle file URLs from Cloudinary
+const processFileUrl = (file) => {
+  if (!file) return null;
+  
+  // If file is already a URL (from Cloudinary), return it
+  if (typeof file === 'string' && (file.startsWith('http') || file.startsWith('https'))) {
+    return file;
+  }
+  
+  // If file is from multer upload (has path/url property)
+  if (file && file.path) {
+    return file.path; // Cloudinary returns URL in file.path
+  }
+  
+  return null;
+};
+
+// @desc    Register new user (UPDATED FOR CLOUDINARY)
 // @route   POST /api/v1/auth/register
 // @access  Public
 const register = catchAsync(async (req, res, next) => {
+  console.log("======================== @register =============================");
+  console.log("Registration request body:", req.body);
+  console.log("Registration files:", req.files || req.file);
+
+  // Handle both form-data and JSON requests
+  let registrationData = req.body;
+  
+  // If form-data, parse JSON fields
+  if (typeof registrationData.email === 'string') {
+    // Already parsed
+  } else {
+    // Parse JSON fields if they exist
+    if (req.body.data) {
+      try {
+        registrationData = JSON.parse(req.body.data);
+      } catch (error) {
+        registrationData = req.body;
+      }
+    }
+  }
+
   const {
     email,
     password,
@@ -59,11 +96,8 @@ const register = catchAsync(async (req, res, next) => {
     raisonRecrutement,
     // Particulier fields
     nomComplet,
-    cin,
-    cinFile
-  } = req.body;
-
-  console.log("📝 Registration request body:", req.body);
+    cin
+  } = registrationData;
 
   // Basic validation
   if (!email || !password || !userType) {
@@ -74,47 +108,6 @@ const register = catchAsync(async (req, res, next) => {
     return next(new AppError(400, 'Type d\'utilisateur invalide'));
   }
 
-  // Entreprise validation
-  if (userType === 'entreprise') {
-    if (!raisonSociale) {
-      return next(new AppError(400, 'La raison sociale est requise'));
-    }
-    /* if (!ville) {
-      return next(new AppError(400, 'La ville est requise'));
-    }
-    if (!telephone) {
-      return next(new AppError(400, 'Le téléphone est requis'));
-    }
-    if (!siegeSocial) {
-      return next(new AppError(400, 'Le siège social est requis'));
-    }
-    if (!secteurActivite) {
-      return next(new AppError(400, 'Le secteur d\'activité est requis'));
-    }
-    if (!tailleEntreprise) {
-      return next(new AppError(400, 'La taille de l\'entreprise est requise'));
-    }
-    if (!raisonRecrutement) {
-      return next(new AppError(400, 'La raison de recrutement est requise'));
-    } */
-  }
-
-  // Particulier validation
-  if (userType === 'particulier') {
-    if (!nomComplet) {
-      return next(new AppError(400, 'Le nom complet est requis'));
-    }
-    if (!ville) {
-      return next(new AppError(400, 'La ville est requise'));
-    }
-    if (!telephone) {
-      return next(new AppError(400, 'Le téléphone est requis'));
-    }
-    if (!cin) {
-      return next(new AppError(400, 'Le CIN ou passeport est requis'));
-    }
-  }
-
   // Check if user already exists
   const existingUser = await User.findOne({ email: email.toLowerCase() });
   if (existingUser) {
@@ -123,6 +116,14 @@ const register = catchAsync(async (req, res, next) => {
 
   // Generate verification code
   const verificationCode = generateVerificationCode();
+
+  // Process uploaded files from Cloudinary
+  let cinFileUrl = null;
+  if (req.file) {
+    cinFileUrl = processFileUrl(req.file);
+  } else if (req.files && req.files.cinFile) {
+    cinFileUrl = processFileUrl(req.files.cinFile[0]);
+  }
 
   // Create user data object
   const userData = {
@@ -136,6 +137,10 @@ const register = catchAsync(async (req, res, next) => {
 
   // Add entreprise-specific fields
   if (userType === 'entreprise') {
+    if (!raisonSociale) {
+      return next(new AppError(400, 'La raison sociale est requise'));
+    }
+    
     userData.raisonSociale = raisonSociale;
     userData.ville = ville;
     userData.telephone = telephone;
@@ -154,11 +159,24 @@ const register = catchAsync(async (req, res, next) => {
 
   // Add particulier-specific fields
   if (userType === 'particulier') {
+    if (!nomComplet) {
+      return next(new AppError(400, 'Le nom complet est requis'));
+    }
+    if (!ville) {
+      return next(new AppError(400, 'La ville est requise'));
+    }
+    if (!telephone) {
+      return next(new AppError(400, 'Le téléphone est requis'));
+    }
+    if (!cin) {
+      return next(new AppError(400, 'Le CIN ou passeport est requis'));
+    }
+
     userData.nomComplet = nomComplet;
     userData.ville = ville;
     userData.telephone = telephone;
     userData.cin = cin;
-    userData.cinFile = cinFile || null;
+    userData.cinFile = cinFileUrl; // Store Cloudinary URL
 
     // Parse nom complet into firstName and lastName
     const names = nomComplet.trim().split(' ');
@@ -169,6 +187,8 @@ const register = catchAsync(async (req, res, next) => {
     userData.city = ville;
     userData.phone = telephone;
   }
+
+  console.log("Creating user with data:", userData);
 
   // Create user
   const user = await User.create(userData);
@@ -197,11 +217,11 @@ const register = catchAsync(async (req, res, next) => {
     });
 
     console.log("✅ Verification email sent to:", user.email);
-    console.log("✅ code verfication:", verificationCode);
+    console.log("✅ Verification code:", verificationCode);
 
     res.status(201).json({
       success: true,
-      status: 'success', // Add for frontend compatibility
+      status: 'success',
       message: 'Inscription réussie! Veuillez vérifier votre email pour le code de vérification.',
       data: {
         userId: user._id,
@@ -211,9 +231,23 @@ const register = catchAsync(async (req, res, next) => {
       }
     });
   } catch (error) {
-    // If email fails, delete the user
-    await User.findByIdAndDelete(user._id);
     console.error('❌ Error sending verification email:', error);
+    
+    // If email fails, try to delete the user and uploaded files
+    try {
+      await User.findByIdAndDelete(user._id);
+      
+      // Delete uploaded file from Cloudinary if exists
+      if (cinFileUrl) {
+        const publicId = extractPublicId(cinFileUrl);
+        if (publicId) {
+          await deleteFile(publicId, 'image');
+        }
+      }
+    } catch (deleteError) {
+      console.error('❌ Error cleaning up after failed email:', deleteError);
+    }
+    
     return next(new AppError(500, 'Erreur lors de l\'envoi de l\'email de vérification. Veuillez réessayer.'));
   }
 });

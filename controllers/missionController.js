@@ -20,7 +20,7 @@ exports.createMission = async (req, res) => {
       neighborhood,
       serviceType,
       serviceCategory,
-      serviceSubcategory,
+      serviceSubcategory, // This should be an array or comma-separated string
       startDate,
       endDate,
       startTime,
@@ -130,7 +130,26 @@ exports.createMission = async (req, res) => {
       console.log(`✅ Entreprise mission limit check passed: ${missionsThisMonth}/${monthlyLimit} missions this month`);
     }
 
-    // Create mission data
+    // Process service subcategories - convert from string to array if needed
+    let subcategoriesArray = [];
+    if (serviceSubcategory) {
+      if (typeof serviceSubcategory === 'string') {
+        // If it's comma-separated string, split it
+        subcategoriesArray = serviceSubcategory.split(',').map(s => s.trim()).filter(s => s);
+      } else if (Array.isArray(serviceSubcategory)) {
+        subcategoriesArray = serviceSubcategory;
+      }
+    }
+
+    // Validate that we have at least one subcategory
+    if (subcategoriesArray.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Veuillez sélectionner au moins une sous-catégorie de service'
+      });
+    }
+
+    // Create mission data - UPDATED FOR SUBCATEGORIES
     const missionData = {
       title,
       description,
@@ -138,7 +157,7 @@ exports.createMission = async (req, res) => {
       neighborhood,
       serviceType,
       serviceCategory,
-      serviceSubcategory,
+      serviceSubcategory: subcategoriesArray, // Store as array
       startDate,
       endDate,
       startTime,
@@ -290,7 +309,8 @@ exports.getAllMissions = async (req, res) => {
   try {
     const {
       city,
-      serviceType,
+      serviceCategory,
+      serviceSubcategory,
       workType,
       paymentType,
       minSalary,
@@ -309,14 +329,22 @@ exports.getAllMissions = async (req, res) => {
     };
 
     if (city) query.city = city;
-    if (serviceType) query.serviceType = serviceType;
+    if (serviceCategory) query.serviceCategory = serviceCategory;
+    
+    // NEW: Filter by subcategory
+    if (serviceSubcategory) {
+      query.serviceSubcategory = { $in: [serviceSubcategory] };
+    }
+    
     if (workType) query.workType = workType;
     if (paymentType) query.paymentType = paymentType;
+    
     if (minSalary || maxSalary) {
       query.salary = {};
       if (minSalary) query.salary.$gte = Number(minSalary);
       if (maxSalary) query.salary.$lte = Number(maxSalary);
     }
+    
     if (startDate) {
       query.startDate = { $gte: new Date(startDate) };
     }
@@ -450,7 +478,8 @@ exports.searchMissions = async (req, res) => {
     const {
       keyword,
       city,
-      serviceType,
+      serviceCategory,
+      serviceSubcategory,
       workType,
       minSalary,
       maxSalary,
@@ -474,7 +503,13 @@ exports.searchMissions = async (req, res) => {
     }
 
     if (city) query.city = city;
-    if (serviceType) query.serviceType = serviceType;
+    if (serviceCategory) query.serviceCategory = serviceCategory;
+    
+    // NEW: Search by subcategory
+    if (serviceSubcategory) {
+      query.serviceSubcategory = { $in: [serviceSubcategory] };
+    }
+    
     if (workType) query.workType = workType;
 
     if (minSalary || maxSalary) {
@@ -563,6 +598,9 @@ exports.getMissionsByLocation = async (req, res) => {
 // @desc    Update mission
 // @route   PUT /api/missions/:id
 // @access  Private (Owner only)
+// @desc    Update mission - UPDATED FOR SUBCATEGORIES
+// @route   PUT /api/missions/:id
+// @access  Private (Owner only)
 exports.updateMission = async (req, res) => {
   try {
     const mission = await Mission.findById(req.params.id);
@@ -604,6 +642,28 @@ exports.updateMission = async (req, res) => {
       Object.assign(mission, updates);
     } else {
       // Full update allowed if no applications
+      
+      // Process service subcategories if being updated
+      if (req.body.serviceSubcategory) {
+        let subcategoriesArray = [];
+        if (typeof req.body.serviceSubcategory === 'string') {
+          // If it's comma-separated string, split it
+          subcategoriesArray = req.body.serviceSubcategory.split(',').map(s => s.trim()).filter(s => s);
+        } else if (Array.isArray(req.body.serviceSubcategory)) {
+          subcategoriesArray = req.body.serviceSubcategory;
+        }
+        
+        // Validate that we have at least one subcategory
+        if (subcategoriesArray.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Veuillez sélectionner au moins une sous-catégorie de service'
+          });
+        }
+        
+        req.body.serviceSubcategory = subcategoriesArray;
+      }
+      
       Object.assign(mission, req.body);
     }
 

@@ -20,6 +20,10 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
+// Body parsing middleware - INCREASE LIMITS FOR FILE UPLOADS
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
 // Socket.IO configuration
 const io = socketIO(server, {
   cors: {
@@ -61,7 +65,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: "*",
   credentials: true
 }));
 
@@ -78,6 +82,9 @@ app.use('/api/v1/conversations', require('./routes/conversations'));
 app.use('/api/v1/subscriptions', require('./routes/subscriptions'));
 app.use('/api/v1/tokens', require('./routes/tokens'));
 app.use('/api/v1/support', require('./routes/support'));
+app.use('/api/v1/payment', require('./routes/cmiPaymentRoutes'));
+app.use('/api/v1/entreprise', require('./routes/entreprise'));
+app.use('/api/v1/particulier', require('./routes/particulier'));
 
 // ============================================
 // DEBUGGING ENDPOINTS
@@ -445,6 +452,8 @@ app.use('*', (req, res) => {
     suggestion: 'Try /api/v1/debug/online-users to see online users'
   });
 });
+
+
 
 // Error handling middleware (should be last)
 app.use(errorHandler);

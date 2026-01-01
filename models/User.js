@@ -186,7 +186,7 @@ const userSchema = new mongoose.Schema({
 
   availability: {
     type: String,
-    enum: ['full-time', 'part-time', 'weekends', 'flexible', null, 'remote'],
+    // enum: ['full-time', 'part-time', 'weekends', 'flexible', null, 'remote'],
     default: null
   },
 
@@ -236,7 +236,7 @@ const userSchema = new mongoose.Schema({
   // Work preference
   preferenceTravail: {
     type: String,
-    enum: ['Sur site', 'À distance', 'Les deux', null],
+    // enum: ['Sur site', 'À distance', 'Les deux', null],
     default: null
   },
 
@@ -274,7 +274,7 @@ const userSchema = new mongoose.Schema({
 
   niveauEtudes: {
     type: String,
-    enum: ['Primaire', 'Collège', 'Lycée', 'Formation professionnelle', 'Licence', 'Master', 'Doctorat', null],
+    // enum: ['Primaire', 'Collège', 'Lycée', 'Formation professionnelle', 'Licence', 'Master', 'Doctorat', null],
     default: null
   },
 
@@ -409,7 +409,7 @@ const userSchema = new mongoose.Schema({
     },
     type: {
       type: String,
-      enum: ['unavailable', 'custom_hours'],
+      // enum: ['unavailable', 'custom_hours'],
       required: true
     },
     customHours: [{
@@ -606,14 +606,14 @@ const userSchema = new mongoose.Schema({
 
   tailleEntreprise: {
     type: String,
-    enum: [
-      '1-10 employés',
-      '11-50 employés',
-      '51-200 employés',
-      '201-500 employés',
-      '500+ employés',
-      null
-    ],
+    // enum: [
+    //   '1-10 employés',
+    //   '11-50 employés',
+    //   '51-200 employés',
+    //   '201-500 employés',
+    //   '500+ employés',
+    //   null
+    // ],
     required: function () {
       return this.userType === 'entreprise';
     }
@@ -621,7 +621,7 @@ const userSchema = new mongoose.Schema({
 
   companySize: {
     type: String,
-    enum: ['1-10', '11-50', '51-200', '201-500', '500+', null],
+    // enum: ['1-10', '11-50', '51-200', '201-500', '500+', null],
     default: null
   },
 
@@ -697,7 +697,7 @@ const userSchema = new mongoose.Schema({
 
   subscriptionPlan: {
     type: String,
-    enum: ['none', 'basic', 'standard', 'premium'],
+    enum: ['none', 'basic', 'premium', 'custom'],
     default: 'none'
   },
 
@@ -847,6 +847,314 @@ const userSchema = new mongoose.Schema({
     }
   },
 
+
+
+
+
+  // Add these if missing in the PARTIMER SPECIFIC FIELDS section
+  nomComplet: {
+    type: String,
+    trim: true
+  },
+
+  anneeNaissance: {
+    type: String,
+    trim: true
+  },
+
+  villeResidence: {
+    type: String,
+    trim: true
+  },
+
+  adresseComplete: {
+    type: String,
+    trim: true
+  },
+
+  categoriesMissions: [{
+    type: String,
+    trim: true
+  }],
+
+  competences: [{
+    type: String,
+    trim: true
+  }],
+
+  languesParlees: [{
+    type: String,
+    trim: true
+  }],
+
+  problemesSante: {
+    type: String,
+    trim: true
+  },
+
+  raisonTravail: [{
+    type: String,
+    trim: true
+  }],
+
+  experienceDetails: {
+    type: String,
+    trim: true
+  },
+
+  domaineExpertise: {
+    type: String,
+    trim: true
+  },
+
+  domaineExpertiseAutre: {
+    type: String,
+    trim: true
+  },
+
+  limitationsPhysiquesAutre: {
+    type: String,
+    trim: true
+  },
+
+
+
+
+   // ============================================================
+  // PAYMENT INFORMATION - CMI (Centre Monétique Interbancaire)
+  // ============================================================
+
+  // CMI Payment Methods (Tokenized - Secure)
+  paymentMethods: [{
+    // CMI Token (returned after successful payment)
+    cmiToken: {
+      type: String,
+      trim: true,
+      select: false // Don't include by default for security
+    },
+    
+    // Card type
+    cardType: {
+      type: String,
+      enum: ['visa', 'mastercard', 'amex', 'cmi', 'other'],
+      trim: true
+    },
+    
+    // Last 4 digits only (safe to store)
+    last4: {
+      type: String,
+      trim: true,
+      maxlength: 4,
+      match: [/^\d{4}$/, 'Last 4 digits must be numeric']
+    },
+    
+    // Card brand/bank
+    bankName: {
+      type: String,
+      trim: true
+    },
+    
+    // Masked card number (e.g., "XXXX-XXXX-XXXX-1234")
+    maskedCardNumber: {
+      type: String,
+      trim: true
+    },
+    
+    // Expiry date - Month (01-12)
+    expiryMonth: {
+      type: String,
+      match: [/^(0[1-9]|1[0-2])$/, 'Invalid expiry month (01-12)'],
+      trim: true
+    },
+    
+    // Expiry date - Year (YY format: 25, 26, etc.)
+    expiryYear: {
+      type: String,
+      match: [/^\d{2}$/, 'Invalid expiry year (YY format)'],
+      trim: true
+    },
+    
+    // Cardholder name
+    cardholderName: {
+      type: String,
+      trim: true,
+      uppercase: true
+    },
+    
+    // Whether this is the default payment method
+    isDefault: {
+      type: Boolean,
+      default: false
+    },
+    
+    // Card verification status
+    isVerified: {
+      type: Boolean,
+      default: false
+    },
+    
+    // 3D Secure enabled
+    threeDSecureEnabled: {
+      type: Boolean,
+      default: true
+    },
+    
+    // When it was added
+    addedAt: {
+      type: Date,
+      default: Date.now
+    },
+    
+    // Last used
+    lastUsedAt: {
+      type: Date
+    },
+    
+    // Payment method status
+    status: {
+      type: String,
+      enum: ['active', 'expired', 'blocked', 'pending'],
+      default: 'active'
+    }
+  }],
+
+  // CMI Configuration per user (if needed)
+  cmiConfig: {
+    // CMI Customer Reference (optional - some implementations use this)
+    customerReference: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+      select: false
+    },
+    
+    // Store ID (if you have multiple stores)
+    storeId: {
+      type: String,
+      trim: true
+    },
+    
+    // Preferred language for CMI payment page
+    preferredLanguage: {
+      type: String,
+      enum: ['fr', 'ar', 'en'],
+      default: 'fr'
+    },
+    
+    // Auto-tokenization enabled
+    autoTokenization: {
+      type: Boolean,
+      default: false
+    }
+  },
+
+  // Payment Transaction History (Summary)
+  paymentHistory: {
+    totalSpent: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    totalTransactions: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    successfulTransactions: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    failedTransactions: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    lastPaymentDate: {
+      type: Date
+    },
+    lastPaymentAmount: {
+      type: Number
+    },
+    lastPaymentStatus: {
+      type: String,
+      enum: ['success', 'failed', 'pending', 'cancelled']
+    }
+  },
+
+  // Billing Information
+  billingInfo: {
+    fullName: {
+      type: String,
+      trim: true
+    },
+    address: {
+      type: String,
+      trim: true
+    },
+    city: {
+      type: String,
+      trim: true
+    },
+    postalCode: {
+      type: String,
+      trim: true
+    },
+    country: {
+      type: String,
+      default: 'MA', // Morocco
+      trim: true
+    },
+    phone: {
+      type: String,
+      trim: true
+    }
+  },
+
+  // Auto-payment settings
+  autoPayment: {
+    enabled: {
+      type: Boolean,
+      default: false
+    },
+    defaultPaymentMethodId: {
+      type: mongoose.Schema.Types.ObjectId
+    },
+    // For subscriptions
+    nextBillingDate: {
+      type: Date
+    },
+    billingCycle: {
+      type: String,
+      enum: ['monthly', 'quarterly', 'yearly', null],
+      default: null
+    }
+  },
+
+  // Payment security
+  paymentSecurity: {
+    // Failed payment attempts counter
+    failedAttempts: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    // Last failed attempt
+    lastFailedAttempt: {
+      type: Date
+    },
+    // Account locked for payments
+    isLocked: {
+      type: Boolean,
+      default: false
+    },
+    // Lock expires at
+    lockExpiresAt: {
+      type: Date
+    }
+  }
+
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -933,18 +1241,7 @@ userSchema.pre('save', async function (next) {
   next();
 });
 
-// Update lastAvailabilityUpdate when availability changes
-userSchema.pre('save', function (next) {
-  if (this.isModified('availabilitySlots') ||
-    this.isModified('vacationPeriods') ||
-    this.isModified('dateExceptions') ||
-    this.isModified('weeklySchedule')) {
-    this.lastAvailabilityUpdate = new Date();
-  }
-  next();
-});
-
-// Sync fields before saving
+// Sync fields before saving - UPDATE THIS SECTION
 userSchema.pre('save', function (next) {
   // Auto-generate nomComplet for partimer
   if (this.userType === 'partimer') {
@@ -952,6 +1249,68 @@ userSchema.pre('save', function (next) {
       this.nomComplet = `${this.firstName} ${this.lastName}`;
     } else if (this.firstName) {
       this.nomComplet = this.firstName;
+    }
+
+    // Additional field syncing for Partimer
+    if (this.city && !this.villeResidence) {
+      this.villeResidence = this.city;
+    }
+    if (this.villeResidence && !this.city) {
+      this.city = this.villeResidence;
+    }
+    if (this.phone && !this.telephone) {
+      this.telephone = this.phone;
+    }
+    if (this.telephone && !this.phone) {
+      this.phone = this.telephone;
+    }
+    if (this.address && !this.adresseComplete) {
+      this.adresseComplete = this.address;
+    }
+    if (this.adresseComplete && !this.address) {
+      this.address = this.adresseComplete;
+    }
+    if (this.serviceCategories && !this.categoriesMissions) {
+      this.categoriesMissions = this.serviceCategories;
+    }
+    if (this.categoriesMissions && !this.serviceCategories) {
+      this.serviceCategories = this.categoriesMissions;
+    }
+    if (this.skills && !this.competences) {
+      this.competences = this.skills;
+    }
+    if (this.competences && !this.skills) {
+      this.skills = this.competences;
+    }
+    if (this.availability && !this.preferenceTravail) {
+      this.preferenceTravail = this.availability;
+    }
+    if (this.preferenceTravail && !this.availability) {
+      this.availability = this.preferenceTravail;
+    }
+    if (this.problemeSanteChronique && !this.problemesSante) {
+      this.problemesSante = this.problemeSanteChronique;
+    }
+    if (this.problemesSante && !this.problemeSanteChronique) {
+      this.problemeSanteChronique = this.problemesSante;
+    }
+    if (this.motivationPartTime && !this.raisonTravail) {
+      this.raisonTravail = this.motivationPartTime;
+    }
+    if (this.raisonTravail && !this.motivationPartTime) {
+      this.motivationPartTime = this.raisonTravail;
+    }
+    if (this.experiencesAnterieures && !this.experienceDetails) {
+      this.experienceDetails = this.experiencesAnterieures;
+    }
+    if (this.experienceDetails && !this.experiencesAnterieures) {
+      this.experiencesAnterieures = this.experienceDetails;
+    }
+    if (this.domaineEtudes && !this.domaineExpertise) {
+      this.domaineExpertise = this.domaineEtudes;
+    }
+    if (this.domaineExpertise && !this.domaineEtudes) {
+      this.domaineEtudes = this.domaineExpertise;
     }
   }
 
@@ -1177,6 +1536,249 @@ userSchema.statics.findPartimersWithUpcomingAvailability = function (days = 7, c
   }
 
   return this.find(query).sort({ 'rating.average': -1, 'lastAvailabilityUpdate': -1 });
+};
+
+// ============================================================
+// PAYMENT-RELATED INSTANCE METHODS
+// ============================================================
+
+// Add a new payment method (after CMI tokenization or direct save)
+userSchema.methods.addPaymentMethod = async function(paymentData) {
+  // Initialize paymentMethods array if it doesn't exist
+  if (!this.paymentMethods) {
+    this.paymentMethods = [];
+  }
+
+  // Ensure only one default payment method
+  if (paymentData.isDefault) {
+    this.paymentMethods.forEach(pm => {
+      pm.isDefault = false;
+    });
+  }
+
+  // Check if payment method already exists (by last4 and expiry)
+  const exists = this.paymentMethods.find(pm => 
+    pm.last4 === paymentData.last4 && 
+    pm.expiryMonth === paymentData.expiryMonth &&
+    pm.expiryYear === paymentData.expiryYear
+  );
+
+  if (exists) {
+    // Update existing payment method
+    exists.cmiToken = paymentData.cmiToken;
+    exists.cardholderName = paymentData.cardholderName;
+    exists.lastUsedAt = new Date();
+    exists.status = 'active';
+  } else {
+    // Add new payment method
+    this.paymentMethods.push({
+      ...paymentData,
+      addedAt: new Date(),
+      status: paymentData.status || 'active'
+    });
+  }
+
+  await this.save();
+  return this;
+};
+
+// Set default payment method
+userSchema.methods.setDefaultPaymentMethod = async function(paymentMethodId) {
+  if (!this.paymentMethods || this.paymentMethods.length === 0) {
+    throw new Error('No payment methods found');
+  }
+
+  this.paymentMethods.forEach(pm => {
+    pm.isDefault = pm._id.toString() === paymentMethodId.toString();
+  });
+  
+  if (this.autoPayment && this.autoPayment.enabled) {
+    this.autoPayment.defaultPaymentMethodId = paymentMethodId;
+  }
+  
+  await this.save();
+  return this;
+};
+
+// Remove a payment method
+userSchema.methods.removePaymentMethod = async function(paymentMethodId) {
+  if (!this.paymentMethods || this.paymentMethods.length === 0) {
+    throw new Error('No payment methods found');
+  }
+
+  const wasDefault = this.paymentMethods.id(paymentMethodId)?.isDefault;
+  
+  this.paymentMethods = this.paymentMethods.filter(
+    pm => pm._id.toString() !== paymentMethodId.toString()
+  );
+  
+  // Set new default if removed was default
+  if (wasDefault && this.paymentMethods.length > 0) {
+    this.paymentMethods[0].isDefault = true;
+  }
+  
+  await this.save();
+  return this;
+};
+
+// Get default payment method
+userSchema.methods.getDefaultPaymentMethod = function() {
+  if (!this.paymentMethods || this.paymentMethods.length === 0) {
+    return null;
+  }
+  return this.paymentMethods.find(pm => pm.isDefault) || this.paymentMethods[0];
+};
+
+// Get active payment methods
+userSchema.methods.getActivePaymentMethods = function() {
+  if (!this.paymentMethods || this.paymentMethods.length === 0) {
+    return [];
+  }
+  return this.paymentMethods.filter(pm => pm.status === 'active');
+};
+
+// Check if payment method is expired
+userSchema.methods.isPaymentMethodExpired = function(paymentMethodId) {
+  if (!this.paymentMethods || this.paymentMethods.length === 0) {
+    return false;
+  }
+
+  const pm = this.paymentMethods.id(paymentMethodId);
+  if (!pm || !pm.expiryMonth || !pm.expiryYear) return false;
+  
+  const now = new Date();
+  const currentYear = now.getFullYear() % 100; // Get YY format
+  const currentMonth = now.getMonth() + 1;
+  
+  const expiryYear = parseInt(pm.expiryYear);
+  const expiryMonth = parseInt(pm.expiryMonth);
+  
+  if (expiryYear < currentYear) return true;
+  if (expiryYear === currentYear && expiryMonth < currentMonth) return true;
+  
+  return false;
+};
+
+// Update payment method status
+userSchema.methods.updatePaymentMethodStatus = async function(paymentMethodId, status) {
+  if (!this.paymentMethods || this.paymentMethods.length === 0) {
+    throw new Error('No payment methods found');
+  }
+
+  const pm = this.paymentMethods.id(paymentMethodId);
+  if (pm) {
+    pm.status = status;
+    await this.save();
+  }
+  return this;
+};
+
+// Record successful payment
+userSchema.methods.recordSuccessfulPayment = async function(amount, paymentMethodId) {
+  // Initialize paymentHistory if it doesn't exist
+  if (!this.paymentHistory) {
+    this.paymentHistory = {
+      totalSpent: 0,
+      totalTransactions: 0,
+      successfulTransactions: 0,
+      failedTransactions: 0
+    };
+  }
+
+  this.paymentHistory.totalSpent = (this.paymentHistory.totalSpent || 0) + amount;
+  this.paymentHistory.totalTransactions = (this.paymentHistory.totalTransactions || 0) + 1;
+  this.paymentHistory.successfulTransactions = (this.paymentHistory.successfulTransactions || 0) + 1;
+  this.paymentHistory.lastPaymentDate = new Date();
+  this.paymentHistory.lastPaymentAmount = amount;
+  this.paymentHistory.lastPaymentStatus = 'success';
+  
+  // Reset failed attempts on successful payment
+  if (!this.paymentSecurity) {
+    this.paymentSecurity = {};
+  }
+  this.paymentSecurity.failedAttempts = 0;
+  this.paymentSecurity.isLocked = false;
+  
+  // Update payment method last used
+  if (paymentMethodId && this.paymentMethods) {
+    const pm = this.paymentMethods.id(paymentMethodId);
+    if (pm) {
+      pm.lastUsedAt = new Date();
+    }
+  }
+  
+  await this.save();
+  return this;
+};
+
+// Record failed payment
+userSchema.methods.recordFailedPayment = async function(amount) {
+  // Initialize paymentHistory if it doesn't exist
+  if (!this.paymentHistory) {
+    this.paymentHistory = {
+      totalSpent: 0,
+      totalTransactions: 0,
+      successfulTransactions: 0,
+      failedTransactions: 0
+    };
+  }
+
+  this.paymentHistory.totalTransactions = (this.paymentHistory.totalTransactions || 0) + 1;
+  this.paymentHistory.failedTransactions = (this.paymentHistory.failedTransactions || 0) + 1;
+  this.paymentHistory.lastPaymentStatus = 'failed';
+  
+  // Initialize paymentSecurity if it doesn't exist
+  if (!this.paymentSecurity) {
+    this.paymentSecurity = {
+      failedAttempts: 0,
+      isLocked: false
+    };
+  }
+
+  // Increment failed attempts
+  this.paymentSecurity.failedAttempts = (this.paymentSecurity.failedAttempts || 0) + 1;
+  this.paymentSecurity.lastFailedAttempt = new Date();
+  
+  // Lock account if too many failed attempts (e.g., 5)
+  if (this.paymentSecurity.failedAttempts >= 5) {
+    this.paymentSecurity.isLocked = true;
+    // Lock for 24 hours
+    this.paymentSecurity.lockExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  }
+  
+  await this.save();
+  return this;
+};
+
+// Check if payment is locked
+userSchema.methods.isPaymentLocked = function() {
+  if (!this.paymentSecurity || !this.paymentSecurity.isLocked) return false;
+  
+  // Check if lock has expired
+  if (this.paymentSecurity.lockExpiresAt && 
+      new Date() > this.paymentSecurity.lockExpiresAt) {
+    this.paymentSecurity.isLocked = false;
+    this.paymentSecurity.failedAttempts = 0;
+    return false;
+  }
+  
+  return true;
+};
+
+// Generate CMI customer reference
+userSchema.methods.generateCMIReference = function() {
+  // Initialize cmiConfig if it doesn't exist
+  if (!this.cmiConfig) {
+    this.cmiConfig = {};
+  }
+
+  if (!this.cmiConfig.customerReference) {
+    // Format: USER-{userType}-{timestamp}-{random}
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substr(2, 5);
+    this.cmiConfig.customerReference = `USER-${this.userType.toUpperCase()}-${timestamp}-${random}`;
+  }
+  return this.cmiConfig.customerReference;
 };
 
 const User = mongoose.model('User', userSchema);

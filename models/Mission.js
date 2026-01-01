@@ -34,14 +34,33 @@ const missionSchema = new mongoose.Schema({
     // required: [true, 'Service type is required']
   },
 
+  // Service Category and Subcategory (from PDF)
   serviceCategory: {
     type: String,
+    required: [true, 'Service category is required'],
+    enum: [
+      'home-services',
+      'education-training',
+      'animals',
+      'administrative-digital',
+      'hospitality-restaurant',
+      'retail-sales',
+      'logistics-delivery',
+      'events-entertainment',
+      'remote-services',
+    ],
     trim: true
   },
 
   serviceSubcategory: {
-    type: String,
-    trim: true
+    type: [String],
+    required: [true, 'At least one service subcategory is required'],
+    validate: {
+      validator: function (v) {
+        return Array.isArray(v) && v.length > 0;
+      },
+      message: 'Please select at least one subcategory'
+    }
   },
 
   // Date and Time
@@ -125,18 +144,6 @@ const missionSchema = new mongoose.Schema({
   },
 
   // Location Coordinates
-  // location: {
-  //   type: {
-  //     type: String,
-  //     enum: ['Point'],
-  //     default: 'Point'
-  //   },
-  //   coordinates: {
-  //     type: [Number], // [longitude, latitude]
-  //     index: '2dsphere'
-  //   }
-  // },
-
   location: {
     type: {
       type: String,
@@ -146,21 +153,9 @@ const missionSchema = new mongoose.Schema({
     coordinates: {
       type: [Number], // [longitude, latitude]
       index: '2dsphere',
-      default: undefined // Important: don't set default to empty array
+      default: undefined
     }
   },
-
-  // latitude: {
-  //   type: Number,
-  //   min: [-90, 'Invalid latitude'],
-  //   max: [90, 'Invalid latitude']
-  // },
-
-  // longitude: {
-  //   type: Number,
-  //   min: [-180, 'Invalid longitude'],
-  //   max: [180, 'Invalid longitude']
-  // },
 
   latitude: {
     type: Number,
@@ -174,56 +169,135 @@ const missionSchema = new mongoose.Schema({
     max: [180, 'Invalid longitude']
   },
 
-
-  // Requirements
+  // Requirements (FIXED TO MATCH PDF)
   requirements: {
+    // Âge: 18-25, 25-34, 34-44, 45-54, 55-64, 65 et +
     age: {
       type: String,
       enum: [
         '',
-        '18-24-years',
-        '25-34-years',
-        '35-44-years',
-        '45-54-years',
-        '55-64-years',
-        '65-years-and-over'
+        '18-25',
+        '25-34',
+        '34-44',
+        '45-54',
+        '55-64',
+        '65-et-plus'
       ]
     },
 
+    // Genre: Homme, Femme
     gender: {
       type: String,
-      enum: ['', 'female', 'male']
+      enum: ['', 'homme', 'femme']
     },
 
+    // Statut: Retraité, Salarié, Étudiant, Femme au foyer, Inactif
+    status: {
+      type: String,
+      enum: ['', 'retired', 'employee', 'student', 'housewife', 'inactive']
+    },
+
+    // Nationalité: Marocaine, Étrangère, Double nationalité
+    nationality: {
+      type: String,
+      enum: ['', 'marocaine', 'etrangere', 'double']
+    },
+
+    // Taille: 150-160, 161-170, 171-180, 181-190
+    height: {
+      type: String,
+      enum: ["", "150 cm - 160", "161 cm - 170", "171 cm - 180", "181 cm - 190"]
+    },
+
+    // Poids: 40-55, 56-70, 71-85, 86-100, 100+
+    weight: {
+      type: String,
+      enum: ["", '40 kg - 55 kg', '56 kg - 70 kg', '71 kg - 85 kg', '86 kg - 100 kg', '+100 kg']
+    },
+
+    // Préférence de travail: Sur site, À distance, Les deux
+    workPreference: {
+      type: String,
+      enum: ["", "Sur site", "À distance", "Les deux"]
+    },
+
+    // Niveau d'études: Primaire, Collège, Lycée, Formation professionnelle, Licence, Master, Doctorat
     educationLevel: {
       type: String,
       enum: [
         '',
-        'high-school-level',
-        'associate-degree',
-        'bachelors-degree',
-        'masters-degree-or-higher'
+        'primaire',
+        'college',
+        'lycee',
+        'formation-professionnelle',
+        'licence',
+        'master',
+        'doctorat'
       ]
     },
 
+    // Domaine d'étude (all 25 options from PDF)
     fieldOfStudy: {
       type: String,
-      trim: true
+      enum: [
+        'education',
+        'ingenierie',
+        'medecine_sante',
+        'commerce_gestion',
+        'arts_design',
+        'arts_culinaires',
+        'plomberie_metiers_techniques',
+        'informatique_programmation',
+        'marketing_communication',
+        'finance_comptabilite',
+        'droit_sciences_politiques',
+        'psychologie_sciences_sociales',
+        'langues_traduction',
+        'architecture_urbanisme',
+        'agriculture_environnement',
+        'tourisme_hotellerie',
+        'transport_logistique',
+        'audiovisuel_cinema',
+        'mode_stylisme',
+        'beaute_esthetique',
+        'sport_coaching',
+        'sciences_fondamentales',
+        'ressources_humaines',
+        'developpement_personnel_coaching',
+        'autre',
+      ]
     },
 
+    // Langues (multiple selection from PDF list)
     languages: [{
       type: String,
-      trim: true
     }],
 
-    motorized: {
+    // Transport: Tous, Voiture, Moto, Vélo/Trottinette électrique, Autre
+    transportType: {
       type: String,
-      trim: true
+      enum: [
+        '',
+        'all',
+        'car',
+        'motorcycle',
+        'bike_scooter',
+        'other',
+      ]
     },
 
+    // Permis de conduire: AM, A1, A, B, C, D, EB, EC, ED
     drivingLicense: {
       type: String,
-      enum: ['', 'AM', 'A1', 'A2', 'A', 'B', 'C', 'D', 'E', 'Professionnel']
+      enum: ['', 'Permis AM',
+        'Permis A1',
+        'Permis A',
+        'Permis B',
+        'Permis C',
+        'Permis D',
+        'Permis EB',
+        'Permis EC',
+        'Permis ED']
     }
   },
 
@@ -332,6 +406,9 @@ missionSchema.index({ startDate: 1, endDate: 1 });
 missionSchema.index({ publishedAt: -1 });
 missionSchema.index({ featuredListing: -1, publishedAt: -1 });
 missionSchema.index({ location: '2dsphere' });
+missionSchema.index({ serviceCategory: 1 });
+missionSchema.index({ serviceSubcategory: 1 });
+missionSchema.index({ serviceCategory: 1, serviceSubcategory: 1 });
 
 // Virtual for duration
 missionSchema.virtual('duration').get(function () {
@@ -343,16 +420,14 @@ missionSchema.virtual('duration').get(function () {
   return 0;
 });
 
-// Pre-save middleware to set location coordinates - FIXED VERSION
-missionSchema.pre('save', function(next) {
-  // Only set location if we have both latitude and longitude
+// Pre-save middleware to set location coordinates
+missionSchema.pre('save', function (next) {
   if (this.latitude != null && this.longitude != null) {
     this.location = {
       type: 'Point',
-      coordinates: [this.longitude, this.latitude] // Note: MongoDB uses [longitude, latitude]
+      coordinates: [this.longitude, this.latitude]
     };
   } else {
-    // If no coordinates, ensure location is undefined, not an incomplete object
     this.location = undefined;
   }
   next();
@@ -372,17 +447,6 @@ missionSchema.pre('save', function (next) {
     const basePublication = 10;
     const featuredCost = this.featuredListing ? 5 : 0;
     this.tokenCost.total = basePublication + featuredCost;
-  }
-  next();
-});
-
-// Pre-save middleware to set location coordinates
-missionSchema.pre('save', function (next) {
-  if (this.latitude && this.longitude) {
-    this.location = {
-      type: 'Point',
-      coordinates: [this.longitude, this.latitude]
-    };
   }
   next();
 });
@@ -411,9 +475,10 @@ missionSchema.methods.incrementViews = async function () {
 // Method to check if requirements are filled
 missionSchema.methods.hasRequirements = function () {
   const req = this.requirements;
-  return req.age || req.gender || req.educationLevel ||
+  return req.age || req.gender || req.status || req.nationality ||
+    req.height || req.weight || req.workPreference || req.educationLevel ||
     req.fieldOfStudy || (req.languages && req.languages.length > 0) ||
-    req.motorized || req.drivingLicense;
+    req.transportType || req.drivingLicense;
 };
 
 // Static method to find missions by location (within radius in km)
@@ -425,7 +490,7 @@ missionSchema.statics.findByLocation = function (longitude, latitude, radiusInKm
           type: 'Point',
           coordinates: [longitude, latitude]
         },
-        $maxDistance: radiusInKm * 1000 // Convert km to meters
+        $maxDistance: radiusInKm * 1000
       }
     }
   });

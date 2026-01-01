@@ -1,9 +1,8 @@
-// routes/auth.js
-
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
+const { uploadRegistrationFiles, handleMulterError } = require('../config/cloudinary');
 
 // ============================================================
 // PUBLIC ROUTES (No authentication required)
@@ -14,7 +13,17 @@ const { protect } = require('../middleware/auth');
  * @desc    Register new user (sends verification code to email)
  * @access  Public
  */
-router.post('/register', authController.register);
+router.post(
+  '/register',
+  uploadRegistrationFiles.fields([
+    { name: 'cinFile', maxCount: 1 },
+    { name: 'photoProfil', maxCount: 1 },
+    { name: 'permisFile', maxCount: 10 },
+    { name: 'autreDoc', maxCount: 1 }
+  ]),
+  handleMulterError,
+  authController.register
+);
 
 /**
  * @route   POST /api/v1/auth/verify-email

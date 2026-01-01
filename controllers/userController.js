@@ -38,6 +38,8 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+
+
 // ============================================
 // UPDATE USER PROFILE
 // ============================================
@@ -45,25 +47,24 @@ const updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
+    console.log('📥 Update profile request:', {
+      userId,
+      body: req.body,
+      userType: req.user.userType
+    });
+
     // Fields that cannot be updated
     const restrictedFields = [
       'password', 'email', 'userType', 'emailVerified',
       'tokens', 'subscriptionPlan', 'rating', 'completedMissions',
-      'statistics', 'createdAt', 'updatedAt'
+      'statistics', 'createdAt', 'updatedAt', '_id', '__v'
     ];
 
     // Remove restricted fields
     restrictedFields.forEach(field => delete req.body[field]);
 
-    const user = await User.findByIdAndUpdate(
-      userId,
-      req.body,
-      {
-        new: true,
-        runValidators: true
-      }
-    ).select('-password -emailVerificationCode -passwordResetCode');
-
+    // Get current user
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -71,16 +72,145 @@ const updateProfile = async (req, res) => {
       });
     }
 
+    console.log('👤 Current user:', {
+      id: user._id,
+      userType: user.userType,
+      email: user.email
+    });
+
+    // Handle Partimer-specific fields
+    if (user.userType === 'partimer') {
+      // Handle anneeNaissance -> dateOfBirth conversion
+      if (req.body.anneeNaissance) {
+        const year = parseInt(req.body.anneeNaissance);
+        if (!isNaN(year)) {
+          req.body.dateOfBirth = new Date(year, 0, 1); // January 1st of that year
+          console.log('📅 Converted anneeNaissance to dateOfBirth:', req.body.dateOfBirth);
+        }
+        delete req.body.anneeNaissance;
+      }
+
+      // Handle nomComplet -> firstName/lastName conversion
+      if (req.body.nomComplet && !req.body.firstName) {
+        const names = req.body.nomComplet.trim().split(' ');
+        req.body.firstName = names[0];
+        req.body.lastName = names.slice(1).join(' ') || names[0];
+        console.log('👤 Converted nomComplet to firstName/lastName:', {
+          firstName: req.body.firstName,
+          lastName: req.body.lastName
+        });
+      }
+
+      // Handle villeResidence -> city conversion
+      if (req.body.villeResidence) {
+        req.body.city = req.body.villeResidence;
+        console.log('🏙️ Converted villeResidence to city:', req.body.city);
+      }
+
+      // Sync phone/telephone
+      if (req.body.phone) {
+        req.body.telephone = req.body.phone;
+      }
+      if (req.body.telephone) {
+        req.body.phone = req.body.telephone;
+      }
+
+      // Handle adresseComplete -> address conversion
+      if (req.body.adresseComplete) {
+        req.body.address = req.body.adresseComplete;
+      }
+
+      // Handle categoriesMissions -> serviceCategories
+      if (req.body.categoriesMissions) {
+        req.body.serviceCategories = req.body.categoriesMissions;
+      }
+
+      // Handle competences -> skills
+      if (req.body.competences) {
+        req.body.skills = req.body.competences;
+      }
+
+      // Handle preferenceTravail -> availability
+      if (req.body.preferenceTravail) {
+        req.body.availability = req.body.preferenceTravail;
+      }
+
+      // Handle problemesSante -> problemeSanteChronique
+      if (req.body.problemesSante) {
+        req.body.problemeSanteChronique = req.body.problemesSante;
+      }
+
+      // Handle raisonTravail -> motivationPartTime
+      if (req.body.raisonTravail) {
+        req.body.motivationPartTime = req.body.raisonTravail;
+      }
+
+      // Handle experienceDetails -> experiencesAnterieures
+      if (req.body.experienceDetails) {
+        req.body.experiencesAnterieures = req.body.experienceDetails;
+      }
+
+      // Handle domaineExpertise -> domaineEtudes
+      if (req.body.domaineExpertise) {
+        req.body.domaineEtudes = req.body.domaineExpertise;
+      }
+
+      // Handle motorise -> moyensTransport (if it's an array)
+      if (req.body.motorise && Array.isArray(req.body.motorise)) {
+        req.body.moyensTransport = req.body.motorise;
+        req.body.motorise = req.body.motorise.length > 0;
+      }
+
+      // Handle languesParlees
+      if (req.body.languesParlees && Array.isArray(req.body.languesParlees)) {
+        req.body.languages = req.body.languesParlees.map(lang => {
+          if (typeof lang === 'string') {
+            return { language: lang, level: 'intermediate' };
+          }
+          return lang;
+        });
+      }
+
+      // Ensure languages array structure
+      if (req.body.languages && Array.isArray(req.body.languages)) {
+        req.body.languages = req.body.languages.map(lang => {
+          if (typeof lang === 'string') {
+            return { language: lang, level: 'intermediate' };
+          }
+          return lang;
+        });
+      }
+    }
+
+    console.log('📝 Final update data:', req.body);
+
+    // Update user with new data
+    Object.keys(req.body).forEach(key => {
+      if (req.body[key] !== undefined) {
+        user[key] = req.body[key];
+      }
+    });
+
+    // Save the user
+    await user.save();
+
+    console.log('✅ User updated successfully');
+
+    // Fetch updated user without sensitive fields
+    const updatedUser = await User.findById(userId)
+      .select('-password -emailVerificationCode -passwordResetCode');
+
     res.status(200).json({
       success: true,
       message: 'Profil mis à jour avec succès',
       data: {
-        user
+        user: updatedUser
       }
     });
 
   } catch (error) {
-    console.error('Update profile error:', error);
+    console.error('❌ Update profile error:', error);
+    console.error('Error stack:', error.stack);
 
     if (error.name === 'ValidationError') {
       const messages = Object.values(error.errors).map(err => err.message);
@@ -106,23 +236,63 @@ const updateProfile = async (req, res) => {
   }
 };
 
+
+
+
 // ============================================
 // UPDATE EMAIL
+// ============================================
+// ============================================
+// UPDATE EMAIL - FIXED VERSION
 // ============================================
 const updateEmail = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { newEmail } = req.body;
+    
+    console.log("📥 Update email request body:", req.body);
+    
+    // Extract newEmail - handle both direct string and object format
+    let emailToUpdate;
+    
+    if (typeof req.body === 'string') {
+      emailToUpdate = req.body;
+    } else if (req.body.newEmail) {
+      emailToUpdate = req.body.newEmail;
+    } else if (typeof req.body.email === 'string') {
+      emailToUpdate = req.body.email;
+    } else {
+      console.error("❌ Could not extract email from request:", req.body);
+      return res.status(400).json({
+        success: false,
+        message: 'Format de requête invalide. Nouvel email requis.'
+      });
+    }
 
-    if (!newEmail) {
+    console.log("✅ Extracted email:", emailToUpdate);
+    console.log("✅ Email type:", typeof emailToUpdate);
+
+
+
+    if (!emailToUpdate || typeof emailToUpdate !== 'string') {
       return res.status(400).json({
         success: false,
         message: 'Nouvel email requis'
       });
     }
 
+    // Trim and validate email format
+    const newEmail = emailToUpdate.trim().toLowerCase();
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Format d\'email invalide'
+      });
+    }
+
     // Check if email is already taken
-    const existingUser = await User.findOne({ email: newEmail.toLowerCase() });
+    const existingUser = await User.findOne({ email: newEmail });
     if (existingUser && existingUser._id.toString() !== userId) {
       return res.status(400).json({
         success: false,
@@ -138,8 +308,16 @@ const updateEmail = async (req, res) => {
       });
     }
 
+    // Check if email is the same as current
+    if (user.email === newEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'Le nouvel email est identique à l\'ancien'
+      });
+    }
+
     // Update email and set as unverified
-    user.email = newEmail.toLowerCase();
+    user.email = newEmail;
     user.emailVerified = false;
     
     // Generate new verification code
@@ -148,6 +326,8 @@ const updateEmail = async (req, res) => {
     user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
 
     await user.save({ validateBeforeSave: false });
+
+    console.log("✅ Email updated successfully to:", newEmail);
 
     // TODO: Send verification email with new code
 
@@ -161,7 +341,7 @@ const updateEmail = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Update email error:', error);
+    console.error('❌ Update email error:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la mise à jour de l\'email',
@@ -1158,7 +1338,7 @@ const getMissingProfileFields = (user) => {
 // ============================================
 module.exports = {
   getUserProfile,
-  updateProfile,
+    updateProfile,
   updateEmail,
   updatePassword,
   uploadProfilePhoto,
