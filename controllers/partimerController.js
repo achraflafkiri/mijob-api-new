@@ -6,6 +6,319 @@ const bcrypt = require('bcryptjs');
 // ============================================================
 // REGISTER PARTIMER
 // ============================================================
+// const registerPartimer = async (req, res) => {
+//   try {
+//     console.log('Request body:', req.body);
+//     console.log('Request files:', req.files);
+
+//     const {
+//       email,
+//       password,
+//       nomComplet,
+//       telephone,
+//       anneeNaissance,
+//       villeResidence,
+
+//       // Personal information
+//       adresseComplete,
+//       taille,
+//       poids,
+//       nationalite,
+//       languesParlees,
+
+//       // Job preferences
+//       categoriesMissions,
+//       preferenceTravail,
+
+//       // Health
+//       problemesSante,
+//       limitationsPhysiques,
+
+//       // Professional
+//       raisonTravail,
+//       raisonTravailAutre,
+//       traitsPersonnalite,
+//       experience,
+//       experienceDetails,
+//       niveauEtudes,
+//       domaineExpertise,
+//       competences,
+
+//       // Transport
+//       permisConduire,
+//       motorise,
+//       transportAutre,
+
+//       // New fields from frontend that need mapping
+//       nationaliteAutre,
+//       limitationsPhysiquesAutre,
+//       domaineExpertiseAutre
+//     } = req.body;
+
+//     console.log("req.body: \n", req.body);
+
+//     // Validate required fields
+//     if (!email || !password || !nomComplet || !telephone || !anneeNaissance || !villeResidence) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Tous les champs obligatoires doivent être remplis'
+//       });
+//     }
+
+//     // Check if user already exists
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Un utilisateur avec cet email existe déjà'
+//       });
+//     }
+
+//     // Calculate date of birth from year
+//     const dateOfBirth = anneeNaissance ? new Date(parseInt(anneeNaissance), 0, 1) : null;
+
+//     // Extract first and last name from nomComplet
+//     const names = nomComplet.trim().split(' ');
+//     const firstName = names[0] || '';
+//     const lastName = names.slice(1).join(' ') || '';
+
+//     // Parse JSON strings from form-data - WITH ERROR HANDLING
+//     const parseJsonField = (field) => {
+//       if (!field) return [];
+//       try {
+//         return typeof field === 'string' ? JSON.parse(field) : field;
+//       } catch (error) {
+//         console.error(`Error parsing ${field}:`, error);
+//         return [];
+//       }
+//     };
+
+//     const parsedLanguages = parseJsonField(languesParlees);
+//     const parsedCategories = parseJsonField(categoriesMissions);
+//     const parsedLimitations = parseJsonField(limitationsPhysiques);
+//     const parsedRaisons = parseJsonField(raisonTravail);
+//     const parsedTraits = parseJsonField(traitsPersonnalite);
+//     const parsedCompetences = parseJsonField(competences);
+//     const parsedPermis = parseJsonField(permisConduire);
+//     const parsedMotorise = parseJsonField(motorise);
+
+//     // Handle "Autre" fields
+//     const finalNationalite = nationalite === "Autre" && nationaliteAutre ? nationaliteAutre : nationalite;
+//     const finalDomaineExpertise = domaineExpertise === "Autre" && domaineExpertiseAutre ? domaineExpertiseAutre : domaineExpertise;
+
+//     // Handle limitations with "Autre" option
+//     let finalLimitations = parsedLimitations;
+//     if (parsedLimitations.includes("Autre (à préciser)") && limitationsPhysiquesAutre) {
+//       finalLimitations = parsedLimitations.filter(lim => lim !== "Autre (à préciser)");
+//       finalLimitations.push(limitationsPhysiquesAutre);
+//     }
+
+//     // Handle file uploads - FIXED FIELD NAMES
+//     let profilePictureUrl = null;
+//     let cinFileUrl = null;
+//     let permisFileUrls = [];
+//     let autreDocUrl = null;
+
+//     if (req.files) {
+//       // FIX: Map frontend field names to backend expected field names
+//       if (req.files.photoProfil && req.files.photoProfil[0]) {
+//         profilePictureUrl = req.files.photoProfil[0].path;
+//       }
+//       if (req.files.cinFile && req.files.cinFile[0]) {
+//         cinFileUrl = req.files.cinFile[0].path;
+//       }
+//       if (req.files.permisFile) {
+//         permisFileUrls = req.files.permisFile.map(file => file.path);
+//       }
+//       if (req.files.autreDoc && req.files.autreDoc[0]) {
+//         autreDocUrl = req.files.autreDoc[0].path;
+//       }
+//     }
+
+//     // Validate profile picture
+//     if (!profilePictureUrl) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'La photo de profil est obligatoire'
+//       });
+//     }
+
+//     // Create user object
+//     const userData = {
+//       email: email.toLowerCase().trim(),
+//       password: password,
+//       userType: 'partimer',
+//       phone: telephone,
+//       city: villeResidence,
+
+//       // Partimer specific fields
+//       firstName,
+//       lastName,
+//       dateOfBirth,
+//       profilePicture: profilePictureUrl,
+
+//       // Personal information
+//       address: adresseComplete || undefined,
+//       taille: taille || undefined,
+//       poids: poids || undefined,
+//       nationalite: finalNationalite || undefined,
+//       languages: parsedLanguages.map(lang => ({
+//         language: lang,
+//         level: 'intermediate'
+//       })),
+
+//       // Job preferences
+//       serviceCategories: parsedCategories,
+//       preferenceTravail: preferenceTravail || undefined,
+
+//       // Health
+//       problemeSanteChronique: problemesSante || undefined,
+//       limitationsPhysiques: finalLimitations,
+
+//       // Professional
+//       motivationPartTime: parsedRaisons,
+//       raisonTravailAutre: raisonTravailAutre || undefined,
+//       traitsPersonnalite: parsedTraits,
+//       experiencesAnterieures: experience === 'non' ? 'Aucune expérience professionnelle' : (experienceDetails || undefined),
+//       niveauEtudes: niveauEtudes || undefined,
+//       domaineEtudes: finalDomaineExpertise || undefined,
+//       skills: parsedCompetences,
+
+//       // Transport
+//       permisConduire: parsedPermis,
+//       motorise: parsedMotorise.length > 0,
+//       moyensTransport: parsedMotorise,
+//       transportAutre: transportAutre || undefined,
+
+//       // Documents
+//       cinDocumentPartimer: cinFileUrl || undefined,
+//       permisDocuments: permisFileUrls.length > 0 ? permisFileUrls : undefined,
+//       autreDocument: autreDocUrl || undefined,
+
+//       // Add all the new fields from frontend
+//       nomComplet: nomComplet,
+//       anneeNaissance: anneeNaissance,
+//       villeResidence: villeResidence,
+//       adresseComplete: adresseComplete || undefined,
+//       categoriesMissions: parsedCategories,
+//       competences: parsedCompetences,
+//       languesParlees: parsedLanguages,
+//       problemesSante: problemesSante || undefined,
+//       raisonTravail: parsedRaisons,
+//       experienceDetails: experienceDetails || undefined,
+//       domaineExpertise: finalDomaineExpertise || undefined,
+//       limitationsPhysiquesAutre: limitationsPhysiquesAutre || undefined,
+
+//       // Availability fields
+//       timePreferences: {
+//         preferredStartTime: '09:00',
+//         preferredEndTime: '17:00',
+//         minimumMissionDuration: 60,
+//         maximumMissionDuration: 480,
+//         breakBetweenMissions: 30
+//       },
+//       advanceBooking: {
+//         minimumNotice: 24,
+//         maximumAdvance: 90
+//       },
+//       instantBookingEnabled: false,
+//       vacationPeriods: []
+//     };
+
+//     // Remove undefined fields
+//     Object.keys(userData).forEach(key => {
+//       if (userData[key] === undefined) {
+//         delete userData[key];
+//       }
+//     });
+
+//     // console.log('Creating user with data:', {
+//     //   email: userData.email,
+//     //   userType: userData.userType,
+//     //   firstName: userData.firstName,
+//     //   lastName: userData.lastName
+//     // });
+
+//     // Create user
+//     const user = await User.create(userData);
+
+//     // Generate email verification code
+//     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+//     user.emailVerificationCode = verificationCode;
+//     user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
+
+//     console.log("verificationCode: ", verificationCode);
+
+//     await user.save({ validateBeforeSave: false });
+
+//     res.status(201).json({
+//       success: true,
+//       status: "success",
+//       message: 'Compte Partimer créé avec succès! Veuillez vérifier votre email.',
+//       data: {
+//         user: {
+//           id: user._id,
+//           email: user.email,
+//           nomComplet: user.firstName + ' ' + user.lastName,
+//           userType: user.userType,
+//           profileCompletion: user.profileCompletion,
+//           profilePicture: user.profilePicture
+//         }
+//       }
+//     });
+
+//   } catch (error) {
+//     console.error('Register partimer error details:', error);
+
+//     // Delete uploaded files if user creation fails
+//     if (req.files) {
+//       const { deleteFile, extractPublicId } = require('../config/cloudinary');
+
+//       for (const field in req.files) {
+//         for (const file of req.files[field]) {
+//           try {
+//             const publicId = extractPublicId(file.path);
+//             if (publicId) {
+//               const resourceType = file.path.includes('.pdf') ? 'raw' : 'image';
+//               await deleteFile(publicId, resourceType);
+//             }
+//           } catch (delError) {
+//             console.error('Error deleting file:', delError);
+//           }
+//         }
+//       }
+//     }
+
+//     if (error.name === 'ValidationError') {
+//       const messages = Object.values(error.errors).map(err => ({
+//         field: err.path,
+//         message: err.message,
+//         value: err.value
+//       }));
+//       console.log('Validation errors:', messages);
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Erreur de validation',
+//         errors: messages.map(err => err.message)
+//       });
+//     }
+
+//     if (error.code === 11000) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Un utilisateur avec cet email existe déjà'
+//       });
+//     }
+
+//     res.status(500).json({
+//       success: false,
+//       message: 'Erreur lors de la création du compte',
+//       error: error.message,
+//       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+//     });
+//   }
+// };
+
 const registerPartimer = async (req, res) => {
   try {
     console.log('Request body:', req.body);
@@ -47,8 +360,15 @@ const registerPartimer = async (req, res) => {
       // Transport
       permisConduire,
       motorise,
-      transportAutre
+      transportAutre,
+
+      // New fields from frontend that need mapping
+      nationaliteAutre,
+      limitationsPhysiquesAutre,
+      domaineExpertiseAutre
     } = req.body;
+
+    console.log("req.body: \n", JSON.stringify(req.body, null, 2));
 
     // Validate required fields
     if (!email || !password || !nomComplet || !telephone || !anneeNaissance || !villeResidence) {
@@ -75,34 +395,75 @@ const registerPartimer = async (req, res) => {
     const firstName = names[0] || '';
     const lastName = names.slice(1).join(' ') || '';
 
-    // Parse JSON strings from form-data
-    const parsedLanguages = languesParlees ? JSON.parse(languesParlees) : [];
-    const parsedCategories = categoriesMissions ? JSON.parse(categoriesMissions) : [];
-    const parsedLimitations = limitationsPhysiques ? JSON.parse(limitationsPhysiques) : [];
-    const parsedRaisons = raisonTravail ? JSON.parse(raisonTravail) : [];
-    const parsedTraits = traitsPersonnalite ? JSON.parse(traitsPersonnalite) : [];
-    const parsedCompetences = competences ? JSON.parse(competences) : [];
-    const parsedPermis = permisConduire ? JSON.parse(permisConduire) : [];
-    const parsedMotorise = motorise ? JSON.parse(motorise) : [];
+    // Parse JSON strings from form-data - WITH ERROR HANDLING
+    const parseJsonField = (field) => {
+      if (!field) return [];
+      try {
+        return typeof field === 'string' ? JSON.parse(field) : field;
+      } catch (error) {
+        console.error(`Error parsing ${field}:`, error);
+        return [];
+      }
+    };
 
-    // Handle file uploads
+    const parsedLanguages = parseJsonField(languesParlees);
+    const parsedCategories = parseJsonField(categoriesMissions);
+    const parsedLimitations = parseJsonField(limitationsPhysiques);
+    const parsedRaisons = parseJsonField(raisonTravail);
+    const parsedTraits = parseJsonField(traitsPersonnalite);
+    const parsedCompetences = parseJsonField(competences);
+    const parsedPermis = parseJsonField(permisConduire);
+    const parsedMotorise = parseJsonField(motorise);
+
+    // Handle "Autre" fields
+    const finalNationalite = nationalite === "Autre" && nationaliteAutre ? nationaliteAutre : nationalite;
+    const finalDomaineExpertise = domaineExpertise === "Autre" && domaineExpertiseAutre ? domaineExpertiseAutre : domaineExpertise;
+
+    // Handle limitations with "Autre" option
+    let finalLimitations = parsedLimitations;
+    if (parsedLimitations.includes("Autre (à préciser)") && limitationsPhysiquesAutre) {
+      finalLimitations = parsedLimitations.filter(lim => lim !== "Autre (à préciser)");
+      finalLimitations.push(limitationsPhysiquesAutre);
+    }
+
+    // Handle "Autre" for work reasons
+    let finalRaisons = parsedRaisons;
+    if (parsedRaisons && parsedRaisons.includes("Autre (champ texte libre)") && raisonTravailAutre) {
+      finalRaisons = parsedRaisons.filter(reason => reason !== "Autre (champ texte libre)");
+      finalRaisons.push(raisonTravailAutre);
+    }
+
+    // Handle file uploads - FIXED FIELD NAMES MAPPING
     let profilePictureUrl = null;
     let cinFileUrl = null;
     let permisFileUrls = [];
     let autreDocUrl = null;
 
     if (req.files) {
+      console.log('Uploaded files:', Object.keys(req.files));
+
+      // Map frontend field names to backend expected field names
       if (req.files.photoProfil && req.files.photoProfil[0]) {
         profilePictureUrl = req.files.photoProfil[0].path;
+        console.log('Profile photo uploaded:', profilePictureUrl);
       }
+
+      // Frontend sends "cinFile" -> backend expects "cinDocumentPartimer"
       if (req.files.cinFile && req.files.cinFile[0]) {
         cinFileUrl = req.files.cinFile[0].path;
+        console.log('CIN file uploaded:', cinFileUrl);
       }
+
+      // Frontend sends "permisFile" -> backend expects "permisDocuments" (array)
       if (req.files.permisFile) {
         permisFileUrls = req.files.permisFile.map(file => file.path);
+        console.log('Permis files uploaded:', permisFileUrls);
       }
+
+      // Frontend sends "autreDoc" -> backend expects "autreDocument"
       if (req.files.autreDoc && req.files.autreDoc[0]) {
         autreDocUrl = req.files.autreDoc[0].path;
+        console.log('Other document uploaded:', autreDocUrl);
       }
     }
 
@@ -114,7 +475,7 @@ const registerPartimer = async (req, res) => {
       });
     }
 
-    // Create user object
+    // Create user object with ALL frontend fields
     const userData = {
       email: email.toLowerCase().trim(),
       password: password,
@@ -128,11 +489,11 @@ const registerPartimer = async (req, res) => {
       dateOfBirth,
       profilePicture: profilePictureUrl,
 
-      // Personal information
+      // Personal information - Map frontend to backend
       address: adresseComplete || undefined,
       taille: taille || undefined,
       poids: poids || undefined,
-      nationalite: nationalite || undefined,
+      nationalite: finalNationalite || undefined,
       languages: parsedLanguages.map(lang => ({
         language: lang,
         level: 'intermediate'
@@ -144,15 +505,15 @@ const registerPartimer = async (req, res) => {
 
       // Health
       problemeSanteChronique: problemesSante || undefined,
-      limitationsPhysiques: parsedLimitations,
+      limitationsPhysiques: finalLimitations,
 
       // Professional
-      motivationPartTime: parsedRaisons,
+      motivationPartTime: finalRaisons,
       raisonTravailAutre: raisonTravailAutre || undefined,
       traitsPersonnalite: parsedTraits,
       experiencesAnterieures: experience === 'non' ? 'Aucune expérience professionnelle' : (experienceDetails || undefined),
       niveauEtudes: niveauEtudes || undefined,
-      domaineEtudes: domaineExpertise || undefined,
+      domaineEtudes: finalDomaineExpertise || undefined,
       skills: parsedCompetences,
 
       // Transport
@@ -161,14 +522,30 @@ const registerPartimer = async (req, res) => {
       moyensTransport: parsedMotorise,
       transportAutre: transportAutre || undefined,
 
-      // Documents
+      // Documents - Map frontend field names to backend field names
       cinDocumentPartimer: cinFileUrl || undefined,
       permisDocuments: permisFileUrls.length > 0 ? permisFileUrls : undefined,
       autreDocument: autreDocUrl || undefined,
 
-      // ============================================================
-      // NEW: Add default availability fields
-      // ============================================================
+      // ADD ALL THE NEW FIELDS FROM FRONTEND (keep same names)
+      nomComplet: nomComplet,
+      anneeNaissance: anneeNaissance,
+      villeResidence: villeResidence,
+      adresseComplete: adresseComplete || undefined,
+      categoriesMissions: parsedCategories,
+      competences: parsedCompetences,
+      languesParlees: parsedLanguages,
+      problemesSante: problemesSante || undefined,
+      raisonTravail: finalRaisons,
+      experienceDetails: experienceDetails || undefined,
+      domaineExpertise: finalDomaineExpertise || undefined,
+
+      // New "Autre" fields
+      nationaliteAutre: nationaliteAutre || undefined,
+      limitationsPhysiquesAutre: limitationsPhysiquesAutre || undefined,
+      domaineExpertiseAutre: domaineExpertiseAutre || undefined,
+
+      // Availability fields
       timePreferences: {
         preferredStartTime: '09:00',
         preferredEndTime: '17:00',
@@ -193,11 +570,18 @@ const registerPartimer = async (req, res) => {
 
     console.log('Creating user with data:', {
       email: userData.email,
-      hasPassword: !!userData.password,
-      passwordLength: userData.password?.length,
       userType: userData.userType,
       firstName: userData.firstName,
-      lastName: userData.lastName
+      lastName: userData.lastName,
+      // Log all frontend fields to verify they're included
+      frontendFields: {
+        nomComplet: userData.nomComplet,
+        anneeNaissance: userData.anneeNaissance,
+        villeResidence: userData.villeResidence,
+        categoriesMissions: userData.categoriesMissions?.length || 0,
+        competences: userData.competences?.length || 0,
+        // Add other fields...
+      }
     });
 
     // Create user
@@ -230,11 +614,10 @@ const registerPartimer = async (req, res) => {
 
   } catch (error) {
     console.error('Register partimer error details:', error);
+    console.error('Error stack:', error.stack);
 
     // Delete uploaded files if user creation fails
     if (req.files) {
-      const { deleteFile, extractPublicId } = require('../config/cloudinary');
-
       for (const field in req.files) {
         for (const file of req.files[field]) {
           try {
@@ -1131,7 +1514,7 @@ const getMyAvailability = async (req, res) => {
     const userId = req.user.id;
 
     const user = await User.findById(userId).select('availabilitySlots lastAvailabilityUpdate');
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -1143,7 +1526,7 @@ const getMyAvailability = async (req, res) => {
     const availability = {};
     user.availabilitySlots.forEach(slot => {
       const dateKey = slot.date.toISOString().split('T')[0]; // YYYY-MM-DD
-      availability[dateKey] = slot.timeSlots.map(timeSlot => 
+      availability[dateKey] = slot.timeSlots.map(timeSlot =>
         `${timeSlot.start} - ${timeSlot.end}`
       );
     });
@@ -1195,10 +1578,10 @@ const updateAvailability = async (req, res) => {
 
     // Convert availability object to array format for database
     const availabilitySlots = [];
-    
+
     for (const [dateKey, timeSlots] of Object.entries(availability)) {
       const date = new Date(dateKey);
-      
+
       if (isNaN(date.getTime())) {
         return res.status(400).json({
           success: false,
@@ -1216,7 +1599,7 @@ const updateAvailability = async (req, res) => {
       }).filter(slot => {
         // Validate time format and logic
         if (!slot.start || !slot.end) return false;
-        
+
         const startMinutes = timeToMinutes(slot.start);
         const endMinutes = timeToMinutes(slot.end);
         return startMinutes < endMinutes;
@@ -1233,7 +1616,7 @@ const updateAvailability = async (req, res) => {
     // Update user's availability
     user.availabilitySlots = availabilitySlots;
     user.lastAvailabilityUpdate = new Date();
-    
+
     await user.save();
 
     console.log('Updated availability slots:', user.availabilitySlots); // Debug log

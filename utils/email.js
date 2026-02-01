@@ -100,7 +100,7 @@ exports.sendEmail = async (options) => {
     console.log('✅ Email sent successfully');
     console.log('📧 Message ID:', info.messageId);
     console.log('📧 Response:', info.response);
-    
+
     // Preview URL (only for Ethereal)
     if (process.env.NODE_ENV === 'development' && !process.env.EMAIL_HOST) {
       const previewUrl = nodemailer.getTestMessageUrl(info);
@@ -116,7 +116,7 @@ exports.sendEmail = async (options) => {
 
     // Provide more specific error messages
     let errorMessage = 'L\'email n\'a pas pu être envoyé';
-    
+
     if (error.code === 'EAUTH') {
       errorMessage = 'Erreur d\'authentification email. Vérifiez les identifiants SMTP.';
     } else if (error.code === 'ESOCKET') {
@@ -134,7 +134,7 @@ exports.sendEmail = async (options) => {
 // Send verification email
 exports.sendVerificationEmail = async (user, verificationToken) => {
   const verificationURL = `${process.env.CLIENT_URL}/verify-email/${verificationToken}`;
-  
+
   const message = `
     Bonjour ${user.firstName || user.entrepriseName},
     
@@ -179,8 +179,8 @@ exports.sendVerificationEmail = async (user, verificationToken) => {
 
 // Send password reset email
 exports.sendPasswordResetEmail = async (user, resetToken) => {
-  const resetURL = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
-  
+  const resetURL = `${process.env.CLIENT_URL}/auth/reset-password/${resetToken}`;
+
   const message = `
     Bonjour ${user.firstName || user.entrepriseName},
     
@@ -226,7 +226,7 @@ exports.sendPasswordResetEmail = async (user, resetToken) => {
 // Send welcome email after verification
 exports.sendWelcomeEmail = async (user) => {
   const dashboardURL = `${process.env.CLIENT_URL}/dashboard`;
-  
+
   const message = `
     Bonjour ${user.firstName || user.entrepriseName},
     

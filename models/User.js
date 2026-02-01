@@ -54,16 +54,6 @@ const userSchema = new mongoose.Schema({
   // PASSWORD RESET
   // ============================================================
 
-  passwordResetCode: {
-    type: String,
-    select: false
-  },
-
-  passwordResetExpires: {
-    type: Date,
-    select: false
-  },
-
   passwordChangedAt: {
     type: Date,
     select: false
@@ -907,20 +897,7 @@ const userSchema = new mongoose.Schema({
     trim: true
   },
 
-  domaineExpertiseAutre: {
-    type: String,
-    trim: true
-  },
-
-  limitationsPhysiquesAutre: {
-    type: String,
-    trim: true
-  },
-
-
-
-
-   // ============================================================
+  // ============================================================
   // PAYMENT INFORMATION - CMI (Centre Monétique Interbancaire)
   // ============================================================
 
@@ -932,14 +909,14 @@ const userSchema = new mongoose.Schema({
       trim: true,
       select: false // Don't include by default for security
     },
-    
+
     // Card type
     cardType: {
       type: String,
       enum: ['visa', 'mastercard', 'amex', 'cmi', 'other'],
       trim: true
     },
-    
+
     // Last 4 digits only (safe to store)
     last4: {
       type: String,
@@ -947,69 +924,69 @@ const userSchema = new mongoose.Schema({
       maxlength: 4,
       match: [/^\d{4}$/, 'Last 4 digits must be numeric']
     },
-    
+
     // Card brand/bank
     bankName: {
       type: String,
       trim: true
     },
-    
+
     // Masked card number (e.g., "XXXX-XXXX-XXXX-1234")
     maskedCardNumber: {
       type: String,
       trim: true
     },
-    
+
     // Expiry date - Month (01-12)
     expiryMonth: {
       type: String,
       match: [/^(0[1-9]|1[0-2])$/, 'Invalid expiry month (01-12)'],
       trim: true
     },
-    
+
     // Expiry date - Year (YY format: 25, 26, etc.)
     expiryYear: {
       type: String,
       match: [/^\d{2}$/, 'Invalid expiry year (YY format)'],
       trim: true
     },
-    
+
     // Cardholder name
     cardholderName: {
       type: String,
       trim: true,
       uppercase: true
     },
-    
+
     // Whether this is the default payment method
     isDefault: {
       type: Boolean,
       default: false
     },
-    
+
     // Card verification status
     isVerified: {
       type: Boolean,
       default: false
     },
-    
+
     // 3D Secure enabled
     threeDSecureEnabled: {
       type: Boolean,
       default: true
     },
-    
+
     // When it was added
     addedAt: {
       type: Date,
       default: Date.now
     },
-    
+
     // Last used
     lastUsedAt: {
       type: Date
     },
-    
+
     // Payment method status
     status: {
       type: String,
@@ -1028,20 +1005,20 @@ const userSchema = new mongoose.Schema({
       sparse: true,
       select: false
     },
-    
+
     // Store ID (if you have multiple stores)
     storeId: {
       type: String,
       trim: true
     },
-    
+
     // Preferred language for CMI payment page
     preferredLanguage: {
       type: String,
       enum: ['fr', 'ar', 'en'],
       default: 'fr'
     },
-    
+
     // Auto-tokenization enabled
     autoTokenization: {
       type: Boolean,
@@ -1153,7 +1130,47 @@ const userSchema = new mongoose.Schema({
     lockExpiresAt: {
       type: Date
     }
-  }
+  },
+
+  nationaliteAutre: {
+    type: String,
+    trim: true
+  },
+
+  limitationsPhysiquesAutre: {
+    type: String,
+    trim: true
+  },
+
+  domaineExpertiseAutre: {
+    type: String,
+    trim: true
+  },
+
+
+  // //////////////////////////////////////
+  // In the PASSWORD RESET section (around line 50-70)
+  passwordResetToken: {
+    type: String,
+    select: false
+  },
+
+  passwordResetExpires: {
+    type: Date,
+    select: false
+  },
+
+  // Update the passwordResetCode section to use token instead (or keep both for backward compatibility)
+  passwordResetCode: {
+    type: String,
+    select: false
+  },
+
+  passwordResetAttempts: {
+    type: Number,
+    default: 0,
+    select: false
+  },
 
 }, {
   timestamps: true,
@@ -1543,7 +1560,7 @@ userSchema.statics.findPartimersWithUpcomingAvailability = function (days = 7, c
 // ============================================================
 
 // Add a new payment method (after CMI tokenization or direct save)
-userSchema.methods.addPaymentMethod = async function(paymentData) {
+userSchema.methods.addPaymentMethod = async function (paymentData) {
   // Initialize paymentMethods array if it doesn't exist
   if (!this.paymentMethods) {
     this.paymentMethods = [];
@@ -1557,8 +1574,8 @@ userSchema.methods.addPaymentMethod = async function(paymentData) {
   }
 
   // Check if payment method already exists (by last4 and expiry)
-  const exists = this.paymentMethods.find(pm => 
-    pm.last4 === paymentData.last4 && 
+  const exists = this.paymentMethods.find(pm =>
+    pm.last4 === paymentData.last4 &&
     pm.expiryMonth === paymentData.expiryMonth &&
     pm.expiryYear === paymentData.expiryYear
   );
@@ -1583,7 +1600,7 @@ userSchema.methods.addPaymentMethod = async function(paymentData) {
 };
 
 // Set default payment method
-userSchema.methods.setDefaultPaymentMethod = async function(paymentMethodId) {
+userSchema.methods.setDefaultPaymentMethod = async function (paymentMethodId) {
   if (!this.paymentMethods || this.paymentMethods.length === 0) {
     throw new Error('No payment methods found');
   }
@@ -1591,38 +1608,38 @@ userSchema.methods.setDefaultPaymentMethod = async function(paymentMethodId) {
   this.paymentMethods.forEach(pm => {
     pm.isDefault = pm._id.toString() === paymentMethodId.toString();
   });
-  
+
   if (this.autoPayment && this.autoPayment.enabled) {
     this.autoPayment.defaultPaymentMethodId = paymentMethodId;
   }
-  
+
   await this.save();
   return this;
 };
 
 // Remove a payment method
-userSchema.methods.removePaymentMethod = async function(paymentMethodId) {
+userSchema.methods.removePaymentMethod = async function (paymentMethodId) {
   if (!this.paymentMethods || this.paymentMethods.length === 0) {
     throw new Error('No payment methods found');
   }
 
   const wasDefault = this.paymentMethods.id(paymentMethodId)?.isDefault;
-  
+
   this.paymentMethods = this.paymentMethods.filter(
     pm => pm._id.toString() !== paymentMethodId.toString()
   );
-  
+
   // Set new default if removed was default
   if (wasDefault && this.paymentMethods.length > 0) {
     this.paymentMethods[0].isDefault = true;
   }
-  
+
   await this.save();
   return this;
 };
 
 // Get default payment method
-userSchema.methods.getDefaultPaymentMethod = function() {
+userSchema.methods.getDefaultPaymentMethod = function () {
   if (!this.paymentMethods || this.paymentMethods.length === 0) {
     return null;
   }
@@ -1630,7 +1647,7 @@ userSchema.methods.getDefaultPaymentMethod = function() {
 };
 
 // Get active payment methods
-userSchema.methods.getActivePaymentMethods = function() {
+userSchema.methods.getActivePaymentMethods = function () {
   if (!this.paymentMethods || this.paymentMethods.length === 0) {
     return [];
   }
@@ -1638,29 +1655,29 @@ userSchema.methods.getActivePaymentMethods = function() {
 };
 
 // Check if payment method is expired
-userSchema.methods.isPaymentMethodExpired = function(paymentMethodId) {
+userSchema.methods.isPaymentMethodExpired = function (paymentMethodId) {
   if (!this.paymentMethods || this.paymentMethods.length === 0) {
     return false;
   }
 
   const pm = this.paymentMethods.id(paymentMethodId);
   if (!pm || !pm.expiryMonth || !pm.expiryYear) return false;
-  
+
   const now = new Date();
   const currentYear = now.getFullYear() % 100; // Get YY format
   const currentMonth = now.getMonth() + 1;
-  
+
   const expiryYear = parseInt(pm.expiryYear);
   const expiryMonth = parseInt(pm.expiryMonth);
-  
+
   if (expiryYear < currentYear) return true;
   if (expiryYear === currentYear && expiryMonth < currentMonth) return true;
-  
+
   return false;
 };
 
 // Update payment method status
-userSchema.methods.updatePaymentMethodStatus = async function(paymentMethodId, status) {
+userSchema.methods.updatePaymentMethodStatus = async function (paymentMethodId, status) {
   if (!this.paymentMethods || this.paymentMethods.length === 0) {
     throw new Error('No payment methods found');
   }
@@ -1674,7 +1691,7 @@ userSchema.methods.updatePaymentMethodStatus = async function(paymentMethodId, s
 };
 
 // Record successful payment
-userSchema.methods.recordSuccessfulPayment = async function(amount, paymentMethodId) {
+userSchema.methods.recordSuccessfulPayment = async function (amount, paymentMethodId) {
   // Initialize paymentHistory if it doesn't exist
   if (!this.paymentHistory) {
     this.paymentHistory = {
@@ -1691,14 +1708,14 @@ userSchema.methods.recordSuccessfulPayment = async function(amount, paymentMetho
   this.paymentHistory.lastPaymentDate = new Date();
   this.paymentHistory.lastPaymentAmount = amount;
   this.paymentHistory.lastPaymentStatus = 'success';
-  
+
   // Reset failed attempts on successful payment
   if (!this.paymentSecurity) {
     this.paymentSecurity = {};
   }
   this.paymentSecurity.failedAttempts = 0;
   this.paymentSecurity.isLocked = false;
-  
+
   // Update payment method last used
   if (paymentMethodId && this.paymentMethods) {
     const pm = this.paymentMethods.id(paymentMethodId);
@@ -1706,13 +1723,13 @@ userSchema.methods.recordSuccessfulPayment = async function(amount, paymentMetho
       pm.lastUsedAt = new Date();
     }
   }
-  
+
   await this.save();
   return this;
 };
 
 // Record failed payment
-userSchema.methods.recordFailedPayment = async function(amount) {
+userSchema.methods.recordFailedPayment = async function (amount) {
   // Initialize paymentHistory if it doesn't exist
   if (!this.paymentHistory) {
     this.paymentHistory = {
@@ -1726,7 +1743,7 @@ userSchema.methods.recordFailedPayment = async function(amount) {
   this.paymentHistory.totalTransactions = (this.paymentHistory.totalTransactions || 0) + 1;
   this.paymentHistory.failedTransactions = (this.paymentHistory.failedTransactions || 0) + 1;
   this.paymentHistory.lastPaymentStatus = 'failed';
-  
+
   // Initialize paymentSecurity if it doesn't exist
   if (!this.paymentSecurity) {
     this.paymentSecurity = {
@@ -1738,35 +1755,35 @@ userSchema.methods.recordFailedPayment = async function(amount) {
   // Increment failed attempts
   this.paymentSecurity.failedAttempts = (this.paymentSecurity.failedAttempts || 0) + 1;
   this.paymentSecurity.lastFailedAttempt = new Date();
-  
+
   // Lock account if too many failed attempts (e.g., 5)
   if (this.paymentSecurity.failedAttempts >= 5) {
     this.paymentSecurity.isLocked = true;
     // Lock for 24 hours
     this.paymentSecurity.lockExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   }
-  
+
   await this.save();
   return this;
 };
 
 // Check if payment is locked
-userSchema.methods.isPaymentLocked = function() {
+userSchema.methods.isPaymentLocked = function () {
   if (!this.paymentSecurity || !this.paymentSecurity.isLocked) return false;
-  
+
   // Check if lock has expired
-  if (this.paymentSecurity.lockExpiresAt && 
-      new Date() > this.paymentSecurity.lockExpiresAt) {
+  if (this.paymentSecurity.lockExpiresAt &&
+    new Date() > this.paymentSecurity.lockExpiresAt) {
     this.paymentSecurity.isLocked = false;
     this.paymentSecurity.failedAttempts = 0;
     return false;
   }
-  
+
   return true;
 };
 
 // Generate CMI customer reference
-userSchema.methods.generateCMIReference = function() {
+userSchema.methods.generateCMIReference = function () {
   // Initialize cmiConfig if it doesn't exist
   if (!this.cmiConfig) {
     this.cmiConfig = {};

@@ -122,6 +122,6 @@ router.delete('/availability/:date', protect, deleteAvailabilityDate);
 // @route   GET /api/v1/users/:partimerId/availability
 // @desc    Get partimer availability (public)
 // @access  Public
-router.get('/availability/users/:partimerId/availability', getPartimerAvailability);
+router.get('/:partimerId/availability', getPartimerAvailability);
 
 module.exports = router;

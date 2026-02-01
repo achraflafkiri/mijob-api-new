@@ -1,4 +1,4 @@
-// server.js - COMPLETE WITH ENHANCED DEBUGGING
+// server.js
 
 require('dotenv').config();
 const express = require('express');
@@ -21,15 +21,15 @@ const app = express();
 const server = http.createServer(app);
 
 // Body parsing middleware - INCREASE LIMITS FOR FILE UPLOADS
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Socket.IO configuration
 const io = socketIO(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: "*",
     credentials: true,
-    methods: ['GET', 'POST']
+    methods: ['GET', 'POST', 'DELETE', 'POST', 'PUT'],
   },
   transports: ['websocket', 'polling'],
   pingTimeout: 60000,
@@ -66,6 +66,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // CORS configuration
 app.use(cors({
   origin: "*",
+  methods: ['GET', 'POST', 'DELETE', 'POST', 'PUT'],
   credentials: true
 }));
 
@@ -465,9 +466,9 @@ server.listen(PORT, () => {
   // console.log('='.repeat(50));
   // console.log(`🚀 MIJOB Server running in ${process.env.NODE_ENV} mode`);
   // console.log(`📡 Port: ${PORT}`);
-  // console.log(`🌐 URL: http://localhost:${PORT}`);
-  // console.log(`💬 Socket.IO: Enabled`);
-  // console.log(`🔍 Debug endpoints available:`);
+  console.log(`🌐 URL: http://localhost:${PORT}`);
+  console.log(`💬 Socket.IO: Enabled`);
+  console.log(`🔍 Debug endpoints available:`);
   // console.log(`   • http://localhost:${PORT}/api/v1/debug/online-users`);
   // console.log(`   • http://localhost:${PORT}/api/v1/debug/real-time-monitor`);
   // console.log(`   • http://localhost:${PORT}/api/v1/debug/server-stats`);

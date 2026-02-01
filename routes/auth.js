@@ -48,17 +48,24 @@ router.post('/login', authController.login);
 
 /**
  * @route   POST /api/v1/auth/forgot-password
- * @desc    Send password reset code to email
+ * @desc    Send password reset link to email
  * @access  Public
  */
 router.post('/forgot-password', authController.forgotPassword);
 
 /**
- * @route   POST /api/v1/auth/reset-password
- * @desc    Reset password with code from email
+ * @route   GET /api/v1/auth/reset-password/:token
+ * @desc    Verify reset token and render reset page
  * @access  Public
  */
-router.post('/reset-password', authController.resetPassword);
+router.get('/reset-password/:token', authController.verifyResetToken);
+
+/**
+ * @route   POST /api/v1/auth/reset-password/:token
+ * @desc    Reset password with token
+ * @access  Public
+ */
+router.post('/reset-password/:token', authController.resetPassword);
 
 // ============================================================
 // PROTECTED ROUTES (Authentication required)
@@ -91,5 +98,9 @@ router.put('/update-password', protect, authController.updatePassword);
  * @access  Private
  */
 router.post('/refresh-token', protect, authController.refreshToken);
+
+router.post('/check-email', authController.CheckIfEmailExists);
+
+router.post('/verify-reset-code', authController.verifyResetCode);
 
 module.exports = router;
