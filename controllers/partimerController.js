@@ -596,6 +596,34 @@ const registerPartimer = async (req, res) => {
 
     await user.save({ validateBeforeSave: false });
 
+    // Send verification email
+    try {
+      const { sendEmail } = require('../utils/email');
+      await sendEmail({
+        email: user.email,
+        subject: 'Vérifiez votre compte MIJOB',
+        message: `Votre code de vérification est: ${verificationCode}\n\nCe code expire dans 24 heures.\n\nSi vous n'avez pas créé de compte, veuillez ignorer cet email.`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #247F6E;">Bienvenue sur MIJOB!</h2>
+            <p>Merci de vous être inscrit en tant que Partimer. Veuillez vérifier votre adresse email en utilisant le code ci-dessous:</p>
+            <div style="background-color: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0; border-radius: 5px;">
+              ${verificationCode}
+            </div>
+            <p style="color: #666;">Ce code expire dans <strong>24 heures</strong>.</p>
+            <p style="color: #666;">Si vous n'avez pas créé de compte MIJOB, veuillez ignorer cet email.</p>
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;">
+            <p style="color: #999; font-size: 12px;">MIJOB - Votre plateforme de travail à temps partiel</p>
+          </div>
+        `
+      });
+      console.log("✅ Verification email sent to:", user.email);
+    } catch (emailError) {
+      console.error('❌ Error sending verification email:', emailError);
+      // We don't necessarily want to fail registration if email fails, 
+      // but we should warn the user.
+    }
+
     res.status(201).json({
       success: true,
       status: "success",

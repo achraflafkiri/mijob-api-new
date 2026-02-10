@@ -190,7 +190,7 @@ const documentFilter = (req, file, cb) => {
 const messageAttachmentFilter = (req, file, cb) => {
   const allowedMimeTypes = [
     'image/jpeg',
-    'image/jpg', 
+    'image/jpg',
     'image/png',
     'image/webp',
     'application/pdf',

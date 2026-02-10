@@ -34,14 +34,21 @@ const createTransporter = () => {
   // For production or when EMAIL_HOST is configured
   console.log('📧 Using configured SMTP server');
   const transportConfig = {
-    host: process.env.EMAIL_HOST,
+    host: process.env.EMAIL_HOST || "smtp.gmail.com",
     port: parseInt(process.env.EMAIL_PORT) || 587,
-    secure: process.env.EMAIL_PORT === '465',
+    secure: (process.env.EMAIL_PORT === '465'), // true for 465, false for 587
     auth: {
-      user: process.env.EMAIL_USERNAME,
-      pass: process.env.EMAIL_PASSWORD
+      user: process.env.EMAIL_USERNAME || "client.mijob@gmail.com",
+      pass: process.env.EMAIL_PASSWORD || "cejvuuwynzyuxhoq"
     }
   };
+
+  // EMAIL_HOST=smtp.gmail.com
+  // EMAIL_PORT=
+  // EMAIL_USERNAME=
+  // EMAIL_PASSWORD=
+  // EMAIL_FROM=noreply@mijob.ma
+  // EMAIL_FROM_NAME=MIJOB
 
   // Add TLS options if needed
   if (transportConfig.port === 587) {
