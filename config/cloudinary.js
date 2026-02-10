@@ -1,7 +1,7 @@
 // config/cloudinary.js
 
 const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const multerStorageCloudinary = require('multer-storage-cloudinary');
 const multer = require('multer');
 
 // ============================================
@@ -19,7 +19,7 @@ cloudinary.config({
 // ============================================
 
 // Profile Photos Storage
-const profilePhotoStorage = new CloudinaryStorage({
+const profilePhotoStorage = new multerStorageCloudinary.CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     const userType = req.user?.userType || 'user';
@@ -27,20 +27,20 @@ const profilePhotoStorage = new CloudinaryStorage({
     const timestamp = Date.now();
 
     return {
-      folder: 'mijob/profiles', // Cloudinary folder
+      folder: 'mijob/profiles',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
       transformation: [
         { width: 500, height: 500, crop: 'fill', gravity: 'face' },
         { quality: 'auto' },
         { fetch_format: 'auto' }
       ],
-      public_id: `${userType}-${userId}-${timestamp}`, // Unique filename
+      public_id: `${userType}-${userId}-${timestamp}`,
     };
   },
 });
 
 // Company Logo Storage
-const logoStorage = new CloudinaryStorage({
+const logoStorage = new multerStorageCloudinary.CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     const userId = req.user?.id || 'unknown';
@@ -60,7 +60,7 @@ const logoStorage = new CloudinaryStorage({
 });
 
 // Documents Storage (CIN, Permits, etc.)
-const documentStorage = new CloudinaryStorage({
+const documentStorage = new multerStorageCloudinary.CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     const userType = req.user?.userType || 'user';
@@ -71,14 +71,14 @@ const documentStorage = new CloudinaryStorage({
     return {
       folder: 'mijob/documents',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-      resource_type: 'auto', // Handles both images and PDFs
+      resource_type: 'auto',
       public_id: `${fieldName}-${userType}-${userId}-${timestamp}`,
     };
   },
 });
 
 // Mission Images Storage
-const missionImageStorage = new CloudinaryStorage({
+const missionImageStorage = new multerStorageCloudinary.CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     const userId = req.user?.id || 'unknown';
@@ -102,7 +102,7 @@ const missionImageStorage = new CloudinaryStorage({
 // ============================================
 
 // This storage handles both profile photos and documents for registration
-const registrationStorage = new CloudinaryStorage({
+const registrationStorage = new multerStorageCloudinary.CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     const timestamp = Date.now();
@@ -138,7 +138,7 @@ const registrationStorage = new CloudinaryStorage({
 // ============================================
 
 // Storage for message attachments (images, PDFs, documents)
-const messageAttachmentStorage = new CloudinaryStorage({
+const messageAttachmentStorage = new multerStorageCloudinary.CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
     const userId = req.user?.id || 'unknown';
@@ -148,7 +148,7 @@ const messageAttachmentStorage = new CloudinaryStorage({
     return {
       folder: 'mijob/messages',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx'],
-      resource_type: 'auto', // Handles images and documents
+      resource_type: 'auto',
       public_id: `message-${userId}-${timestamp}-${randomString}`,
     };
   },
