@@ -241,7 +241,7 @@ exports.sendWelcomeEmail = async (user) => {
     
     Vous pouvez maintenant accéder à toutes les fonctionnalités de la plateforme.
     
-    ${user.userType === 'partimer' ? 'Commencez à explorer les missions disponibles et postulez à celles qui vous intéressent.' : 'Commencez à publier vos missions et trouvez les meilleurs talents.'}
+    ${user.userType === 'partimer' ? 'Commencez à explorer les missions disponibles et postulez à celles qui vous intéressent.' : 'Commencez à publier vos missions et trouvez les meilleurs partimers.'}
     
     Visitez votre tableau de bord : ${dashboardURL}
     
@@ -255,7 +255,7 @@ exports.sendWelcomeEmail = async (user) => {
       <p>Bonjour <strong>${user.firstName || user.entrepriseName}</strong>,</p>
       <p>Votre compte MIJOB a été vérifié avec succès !</p>
       <p>Vous pouvez maintenant accéder à toutes les fonctionnalités de la plateforme.</p>
-      <p>${user.userType === 'partimer' ? 'Commencez à explorer les missions disponibles et postulez à celles qui vous intéressent.' : 'Commencez à publier vos missions et trouvez les meilleurs talents.'}</p>
+      <p>${user.userType === 'partimer' ? 'Commencez à explorer les missions disponibles et postulez à celles qui vous intéressent.' : 'Commencez à publier vos missions et trouvez les meilleurs partimers.'}</p>
       <div style="text-align: center; margin: 30px 0;">
         <a href="${dashboardURL}" 
            style="background-color: #247F6E; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
